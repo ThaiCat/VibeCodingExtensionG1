@@ -204,29 +204,32 @@ namespace VibeCodingExtensionG1
             try
             {
                 var serializer = new JavaScriptSerializer();
+                // Ограничиваем длину текста, чтобы сериализатор не захлебнулся
+                serializer.MaxJsonLength = int.MaxValue;
 
-                // Парсим в обычный словарь (object в данном случае будет Dictionary<string, object>)
-                var result = serializer.Deserialize<IDictionary<string, object>>(json);
+                var root = serializer.Deserialize<Dictionary<string, object>>(json);
 
-                // Пошагово вытаскиваем данные с приведением типов
-                if (result.TryGetValue("choices", out object choicesObj))
+                if (root != null && root.ContainsKey("choices"))
                 {
-                    var choices = choicesObj as ArrayList;
-                    if (choices != null && choices.Count > 0)
+                    var choices = root["choices"] as IEnumerable;
+                    foreach (var choice in choices)
                     {
-                        var firstChoice = choices[0] as IDictionary<string, object>;
-                        if (firstChoice != null && firstChoice.TryGetValue("message", out object messageObj))
+                        var choiceDict = choice as Dictionary<string, object>;
+                        if (choiceDict != null && choiceDict.ContainsKey("message"))
                         {
-                            var message = messageObj as IDictionary<string, object>;
-                            if (message != null && message.TryGetValue("content", out object content))
+                            var messageDict = choiceDict["message"] as Dictionary<string, object>;
+                            if (messageDict != null && messageDict.ContainsKey("content"))
                             {
-                                return content.ToString();
+                                string content = messageDict["content"]?.ToString();
+                                if (!string.IsNullOrEmpty(content))
+                                {
+                                    return content;
+                                }
                             }
                         }
                     }
                 }
-
-                return "Ошибка: Не удалось найти контент в JSON. Проверьте лог LM Studio.";
+                return "Ошибка: Структура JSON распознана, но поле 'content' пустое.";
             }
             catch (Exception ex)
             {
