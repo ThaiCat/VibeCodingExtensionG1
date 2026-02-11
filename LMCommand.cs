@@ -68,6 +68,20 @@ namespace VibeCodingExtensionG1
             }
         }
 
+
+        private void ExecuteShowChat(object sender, EventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            // Находим или создаем окно
+            ToolWindowPane window = this.package.FindToolWindow(typeof(ChatWindow), 0, true);
+            if ((null == window) || (null == window.Frame))
+            {
+                throw new NotSupportedException("Cannot create tool window");
+            }
+            IVsWindowFrame windowFrame = (IVsWindowFrame)window.Frame;
+            Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(windowFrame.Show());
+        }
+
         // --- ЛОГИКА ПЕРВОЙ КНОПКИ (ASK AI) ---
         private void ExecuteAsk(object sender, EventArgs e)
         {
