@@ -16,13 +16,10 @@ namespace VibeCodingExtensionG1
 {
     internal sealed class LMCommand
     {
-        //private static string contextCode = string.Empty;
-        //private static string contextFileName = string.Empty;
-
         // Вместо static string contextCode...
         public static Dictionary<string, string> ContextFiles = new Dictionary<string, string>();
 
-        public static readonly Guid CommandSet = new Guid("7A94A48F-9C2B-42E9-8179-ED0C72668AF5");
+        //public static readonly Guid CommandSet = new Guid("7A94A48F-9C2B-42E9-8179-ED0C72668AF5");
 
         private readonly AsyncPackage package;
 
@@ -42,6 +39,7 @@ namespace VibeCodingExtensionG1
 
             if (commandService != null)
             {
+                Guid CommandSet = new Guid(VibeCodingExtensionG1Package.guidCmdSet);
                 // Идентификаторы команд должны совпадать с файлом magic.vsct
                 // Используем константы напрямую. Это и есть "инлайнинг" в контексте VS SDK.
                 commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
@@ -117,22 +115,6 @@ namespace VibeCodingExtensionG1
                 await ProcessAddContextAsync();
             });
         }
-
-        //private async Task ProcessAddContextAsync()
-        //{
-        //    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-        //    var dte = await package.GetServiceAsync(typeof(SDTE)) as DTE2;
-
-        //    if (dte?.ActiveDocument != null)
-        //    {
-        //        var textDoc = dte.ActiveDocument.Object("TextDocument") as TextDocument;
-        //        var editPoint = textDoc.StartPoint.CreateEditPoint();
-        //        contextCode = editPoint.GetText(textDoc.EndPoint);
-        //        contextFileName = dte.ActiveDocument.Name;
-
-        //        dte.StatusBar.Text = $"Контекст файла '{contextFileName}' сохранен.";
-        //    }
-        //}
 
         // Обновим метод сохранения контекста
         private async Task ProcessAddContextAsync()
@@ -251,15 +233,6 @@ namespace VibeCodingExtensionG1
                 var messages = new System.Collections.Generic.List<object>();
 
                 // Если мы ранее "запомнили" файл, добавляем его первым
-                //if (!string.IsNullOrEmpty(contextCode))
-                //{
-                //    messages.Add(new
-                //    {
-                //        role = "system",
-                //        content = $"CONTEXT FILE ({contextFileName}):\n\n{contextCode}"
-                //    });
-                //}
-
                 if (ContextFiles.Count > 0)
                 {
                     StringBuilder fullContext = new StringBuilder("Используй следующий контекст из нескольких файлов:\n\n");
@@ -313,37 +286,6 @@ namespace VibeCodingExtensionG1
             }
             catch (Exception ex) { return "Ошибка: " + ex.Message; }
         }
-
-        //private async Task<string> CallLMStudioAsync(string prompt)
-        //{
-        //    // МЫ В: Фоновом потоке.
-        //    try
-        //    {
-        //        // Экранируем текст для JSON
-        //        string escaped = HttpUtility.JavaScriptStringEncode(prompt);
-        //        string jsonPayload = "{\"model\":\"local-model\",\"messages\":[{\"role\":\"user\",\"content\":\"" + escaped + "\"}],\"temperature\":0.7}";
-
-        //        using (var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
-        //        {
-        //            // Выполняем HTTP POST запрос
-        //            var response = await client.PostAsync("http://127.0.0.1:1234/v1/chat/completions", content);
-
-        //            if (!response.IsSuccessStatusCode)
-        //                return "Ошибка сети: " + response.StatusCode;
-
-        //            string jsonResponse = await response.Content.ReadAsStringAsync(); 
-        //            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-        //            LogToOutputWindow("RAW JSON: " + jsonResponse);
-
-        //            // Парсим результат через System.Text.Json (надежно для больших текстов)
-        //            return ParseJsonContent(jsonResponse);
-        //        }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return "Ошибка: " + ex.Message;
-        //    }
-        //}
 
         private string ParseJsonContent(string json)
         {

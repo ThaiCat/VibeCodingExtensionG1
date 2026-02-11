@@ -1,7 +1,10 @@
 ﻿using Microsoft.VisualStudio.Shell;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace VibeCodingExtensionG1
@@ -11,7 +14,8 @@ namespace VibeCodingExtensionG1
         private StackPanel filesPanel;
         public static ChatWindowControl Instance { get; private set; }
 
-        private TextBox responseBox;
+        //private TextBox responseBox;
+        private RichTextBox responseBox;
         private TextBox inputBox;
 
         private System.Windows.Threading.DispatcherTimer longPressTimer;
@@ -53,13 +57,23 @@ namespace VibeCodingExtensionG1
             grid.Children.Add(fileScroll);
 
             // --- 1: ПОЛЕ ОТВЕТА ---
-            responseBox = new TextBox
+            // Вместо TextBox используем RichTextBox
+            responseBox = new RichTextBox
             {
                 IsReadOnly = true,
-                TextWrapping = TextWrapping.Wrap,
-                AcceptsReturn = true,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)), // Темный фон как в VS
+                Foreground = Brushes.LightGray,
+                FontFamily = new FontFamily("Consolas"), // Моноширинный шрифт для кода
+                Document = new FlowDocument()
             };
+            //responseBox = new TextBox
+            //{
+            //    IsReadOnly = true,
+            //    TextWrapping = TextWrapping.Wrap,
+            //    AcceptsReturn = true,
+            //    VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            //};
             Grid.SetRow(responseBox, 1); // ТУТ ВАЖНО: индекс 1
             grid.Children.Add(responseBox);
 
@@ -213,7 +227,8 @@ namespace VibeCodingExtensionG1
             //string text = inputBox.Text;
             if (string.IsNullOrWhiteSpace(text)) return;
 
-            responseBox.AppendText($"\nUser: {text}\n");
+            AppendFormattedText($"{text}\n", true);
+            //responseBox.AppendText($"\nUser: {text}\n");
             inputBox.Clear();
 
             // Вызов вашей логики
@@ -221,9 +236,96 @@ namespace VibeCodingExtensionG1
             {
                 string reply = await LMCommand.Instance.CallAiFromChatAsync(text);
                 await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                responseBox.AppendText($"\nAI: {reply}\n");
+                //responseBox.AppendText($"\nAI: {reply}\n");
+                AppendFormattedText($"{reply}\n", false);
                 responseBox.ScrollToEnd();
             });
+        }
+
+        private void AppendFormattedText(string text, bool isUser)
+        {
+            var paragraph = new Paragraph { Margin = new Thickness(0, 5, 0, 5) };
+
+            if (isUser)
+            {
+                paragraph.Inlines.Add(new Bold(new Run("User: ")) { Foreground = Brushes.SkyBlue });
+                paragraph.Inlines.Add(new Run(text));
+            }
+            else
+            {
+                paragraph.Inlines.Add(new Bold(new Run("AI: ")) { Foreground = Brushes.LightGreen });
+                paragraph.Inlines.Add(new LineBreak());
+
+                string[] parts = text.Split(new[] { "```" }, StringSplitOptions.None);
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    if (i % 2 == 1) // БЛОК КОДА
+                    {
+                        // Очищаем от названия языка (например, ```csharp)
+                        string code = parts[i];
+                        if (code.Contains("\n")) code = code.Substring(code.IndexOf('\n')).Trim();
+
+                        // Добавляем пустую строку для визуального отступа
+                        paragraph.Inlines.Add(new LineBreak());
+
+                        // Красим код
+                        AddHighlightCode(paragraph, code);
+
+                        paragraph.Inlines.Add(new LineBreak());
+                    }
+                    else // ОБЫЧНЫЙ ТЕКСТ
+                    {
+                        paragraph.Inlines.Add(new Run(parts[i]));
+                    }
+                }
+            }
+
+            responseBox.Document.Blocks.Add(paragraph);
+            responseBox.ScrollToEnd();
+        }
+
+        private void AddHighlightCode(Paragraph paragraph, string code)
+        {
+            var keywords = new HashSet<string> {
+                "public", "private", "protected", "static", "class", "struct", "void",
+                "string", "int", "bool", "var", "async", "await", "return", "new", "using", "if", "else", "foreach", "for"
+            };
+
+            // Регулярка для деления на: комментарии (//...), строки ("..."), слова (\w+) или прочее (\W)
+            var tokens = System.Text.RegularExpressions.Regex.Matches(code, @"(//.*?$)|("".*?"")|(\w+)|(\W)",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+
+            foreach (System.Text.RegularExpressions.Match match in tokens)
+            {
+                string token = match.Value;
+                var run = new Run(token) { FontFamily = new FontFamily("Consolas") };
+
+                if (token.StartsWith("//")) // КОММЕНТАРИИ
+                {
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(87, 166, 74)); // Зеленый VS
+                }
+                else if (token.StartsWith("\"") && token.EndsWith("\"")) // СТРОКИ
+                {
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(214, 157, 133)); // Рыжий VS
+                }
+                else if (keywords.Contains(token)) // КЛЮЧЕВЫЕ СЛОВА
+                {
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(86, 156, 214)); // Синий VS
+                }
+                else if (System.Text.RegularExpressions.Regex.IsMatch(token, @"^\d+$")) // ЧИСЛА
+                {
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(181, 206, 168));
+                }
+                else
+                {
+                    run.Foreground = Brushes.Gainsboro;
+                }
+
+                // Подсвечиваем фон блока кода легким серым цветом, чтобы отделить от текста
+                run.Background = new SolidColorBrush(Color.FromRgb(40, 40, 40));
+
+                paragraph.Inlines.Add(run);
+            }
         }
 
 
