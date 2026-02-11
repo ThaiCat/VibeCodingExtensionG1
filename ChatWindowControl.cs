@@ -272,19 +272,7 @@ namespace VibeCodingExtensionG1
                 zoomInput.Text = $"{(int)(zoom * 100)}%";
             }
         }
-        //private void ApplyZoom(double zoom)
-        //{
-        //    // ... расчет newSize ...
 
-        //    inputBox.FontSize = newSize;
-
-        //    // Применяем ко всему содержимому истории чата
-        //    var range = new TextRange(responseBox.Document.ContentStart, responseBox.Document.ContentEnd);
-        //    range.ApplyPropertyValue(TextElement.FontSizeProperty, newSize);
-
-        //    // И устанавливаем дефолт для будущих сообщений
-        //    responseBox.FontSize = newSize;
-        //}
         // Сам метод:
         private void ChatWindowControl_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
