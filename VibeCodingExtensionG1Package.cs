@@ -24,6 +24,7 @@ namespace VibeCodingExtensionG1
     /// To get loaded into VS, the package must be referred by &lt;Asset Type="Microsoft.VisualStudio.VsPackage" ...&gt; in .vsixmanifest file.
     /// </para>
     /// </remarks>
+    [ProvideToolWindow(typeof(ChatWindow))] // Указываем тип твоего окна
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [Guid(VibeCodingExtensionG1Package.PackageGuidString)]
     [ProvideMenuResource("Menus.ctmenu", 1)]

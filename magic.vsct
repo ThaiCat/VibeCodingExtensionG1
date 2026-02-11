@@ -30,6 +30,12 @@
 					<ButtonText>0. Add Current File to Context</ButtonText>
 				</Strings>
 			</Button>
+			<Button guid="guidCmdSet" id="ShowChatCommandId" priority="0x0103" type="Button">
+				<Parent guid="guidCmdSet" id="MyMenuGroup" />
+				<Strings>
+					<ButtonText>AI Chat Window</ButtonText>
+				</Strings>
+			</Button>
 		</Buttons>
 	</Commands>
 
@@ -40,6 +46,7 @@
 			<IDSymbol name="LMCommandId" value="0x0100" />
 			<IDSymbol name="InsertCommandId" value="0x0101" />
 			<IDSymbol name="AddContextCommandId" value="0x0102" />
+			<IDSymbol name="ShowChatCommandId" value="0x0103" />
 		</GuidSymbol>
 	</Symbols>
 

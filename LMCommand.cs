@@ -16,8 +16,11 @@ namespace VibeCodingExtensionG1
 {
     internal sealed class LMCommand
     {
-        private static string contextCode = string.Empty;
-        private static string contextFileName = string.Empty;
+        //private static string contextCode = string.Empty;
+        //private static string contextFileName = string.Empty;
+
+        // Вместо static string contextCode...
+        public static Dictionary<string, string> ContextFiles = new Dictionary<string, string>();
 
         public static readonly Guid CommandSet = new Guid("7A94A48F-9C2B-42E9-8179-ED0C72668AF5");
 
@@ -44,6 +47,7 @@ namespace VibeCodingExtensionG1
                 commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
                 commandService.AddCommand(new MenuCommand(ExecuteInsert, new CommandID(CommandSet, 0x0101)));
                 commandService.AddCommand(new MenuCommand(ExecuteAddFile, new CommandID(CommandSet, 0x0102)));
+                commandService.AddCommand(new MenuCommand(ExecuteShowChat, new CommandID(CommandSet, 0x0103)));
             }
         }
 
@@ -68,16 +72,18 @@ namespace VibeCodingExtensionG1
             }
         }
 
-
         private void ExecuteShowChat(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            // Находим или создаем окно
+
+            // FindToolWindow ищет существующее окно или создает новое
             ToolWindowPane window = this.package.FindToolWindow(typeof(ChatWindow), 0, true);
             if ((null == window) || (null == window.Frame))
             {
-                throw new NotSupportedException("Cannot create tool window");
+                throw new NotSupportedException("Не удалось создать окно чата");
             }
+
+            // Показываем окно
             IVsWindowFrame windowFrame = (IVsWindowFrame)window.Frame;
             Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(windowFrame.Show());
         }
@@ -112,6 +118,23 @@ namespace VibeCodingExtensionG1
             });
         }
 
+        //private async Task ProcessAddContextAsync()
+        //{
+        //    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+        //    var dte = await package.GetServiceAsync(typeof(SDTE)) as DTE2;
+
+        //    if (dte?.ActiveDocument != null)
+        //    {
+        //        var textDoc = dte.ActiveDocument.Object("TextDocument") as TextDocument;
+        //        var editPoint = textDoc.StartPoint.CreateEditPoint();
+        //        contextCode = editPoint.GetText(textDoc.EndPoint);
+        //        contextFileName = dte.ActiveDocument.Name;
+
+        //        dte.StatusBar.Text = $"Контекст файла '{contextFileName}' сохранен.";
+        //    }
+        //}
+
+        // Обновим метод сохранения контекста
         private async Task ProcessAddContextAsync()
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -121,10 +144,17 @@ namespace VibeCodingExtensionG1
             {
                 var textDoc = dte.ActiveDocument.Object("TextDocument") as TextDocument;
                 var editPoint = textDoc.StartPoint.CreateEditPoint();
-                contextCode = editPoint.GetText(textDoc.EndPoint);
-                contextFileName = dte.ActiveDocument.Name;
+                string content = editPoint.GetText(textDoc.EndPoint);
+                string fileName = dte.ActiveDocument.Name;
 
-                dte.StatusBar.Text = $"Контекст файла '{contextFileName}' сохранен.";
+                if (!ContextFiles.ContainsKey(fileName))
+                {
+                    ContextFiles.Add(fileName, content);
+                    // Сообщаем окну чата (если оно открыто), что список обновился
+                    ChatWindowControl.Instance?.RefreshFilesList();
+                }
+
+                dte.StatusBar.Text = $"Файл '{fileName}' добавлен в контекст чата.";
             }
         }
 
@@ -221,12 +251,29 @@ namespace VibeCodingExtensionG1
                 var messages = new System.Collections.Generic.List<object>();
 
                 // Если мы ранее "запомнили" файл, добавляем его первым
-                if (!string.IsNullOrEmpty(contextCode))
+                //if (!string.IsNullOrEmpty(contextCode))
+                //{
+                //    messages.Add(new
+                //    {
+                //        role = "system",
+                //        content = $"CONTEXT FILE ({contextFileName}):\n\n{contextCode}"
+                //    });
+                //}
+
+                if (ContextFiles.Count > 0)
                 {
+                    StringBuilder fullContext = new StringBuilder("Используй следующий контекст из нескольких файлов:\n\n");
+                    foreach (var file in ContextFiles)
+                    {
+                        fullContext.AppendLine($"--- FILE: {file.Key} ---");
+                        fullContext.AppendLine(file.Value);
+                        fullContext.AppendLine("-------------------\n");
+                    }
+
                     messages.Add(new
                     {
                         role = "system",
-                        content = $"CONTEXT FILE ({contextFileName}):\n\n{contextCode}"
+                        content = fullContext.ToString()
                     });
                 }
 
