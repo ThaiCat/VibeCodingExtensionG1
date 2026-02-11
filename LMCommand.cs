@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.Shell.Interop;
 using EnvDTE;
 using EnvDTE80;
 using System.Web;
-using System.Text.Json; // Используем для надежного парсинга больших ответов
+using System.Web.Script.Serialization; // Добавь этот using
 
 namespace VibeCodingExtensionG1
 {
@@ -50,10 +50,21 @@ namespace VibeCodingExtensionG1
 
         public static async Task InitializeAsync(AsyncPackage package)
         {
-            // ПЕРЕКЛЮЧЕНИЕ: На UI поток для регистрации команд в меню
+            // Мы уже в UI-потоке (так как переключились в Package), 
+            // но на всякий случай подтверждаем это:
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
+
+            // Пытаемся получить сервис команд
             OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
-            Instance = new LMCommand(package, commandService);
+
+            // КРИТИЧЕСКИЙ МОМЕНТ: 
+            // Если commandService == null, значит Студия еще не готова. 
+            // В норме на UI потоке внутри InitializeAsync пакета он уже должен быть доступен.
+            if (commandService != null)
+            {
+                // Только когда сервис ТОЧНО получен, создаем инстанс и вешаем его в статику
+                Instance = new LMCommand(package, commandService);
+            }
         }
 
         // --- ЛОГИКА ПЕРВОЙ КНОПКИ (ASK AI) ---
@@ -170,19 +181,35 @@ namespace VibeCodingExtensionG1
                     string jsonResponse = await response.Content.ReadAsStringAsync();
 
                     // Парсим результат через System.Text.Json (надежно для больших текстов)
-                    using (JsonDocument doc = JsonDocument.Parse(jsonResponse))
-                    {
-                        return doc.RootElement
-                                  .GetProperty("choices")[0]
-                                  .GetProperty("message")
-                                  .GetProperty("content")
-                                  .GetString();
-                    }
+                    return ParseJsonContent(jsonResponse);
                 }
             }
             catch (Exception ex)
             {
                 return "Ошибка: " + ex.Message;
+            }
+        }
+
+        private string ParseJsonContent(string json)
+        {
+            try
+            {
+                var serializer = new JavaScriptSerializer();
+                // Динамически парсим в словарь
+                var result = serializer.Deserialize<dynamic>(json);
+
+                // В LM Studio структура такая: choices[0].message.content
+                // JavaScriptSerializer выдает вложенные Dictionary и ArrayList
+                var choices = result["choices"] as System.Collections.ArrayList;
+                var firstChoice = choices[0] as System.Collections.IDictionary;
+                var message = firstChoice["message"] as System.Collections.IDictionary;
+
+                return message["content"].ToString();
+            }
+            catch (Exception ex)
+            {
+                // Если что-то пошло не так, вернем сырой текст для отладки
+                return "Ошибка парсинга: " + ex.Message + "\nСырой ответ: " + json;
             }
         }
 
