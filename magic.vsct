@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+	<Extern href="stdidcmd.h"/>
+	<Extern href="vsshlids.h"/>
+
+	<Commands package="guidPackage">
+		<Groups>
+			<Group guid="guidCmdSet" id="MyMenuGroup" priority="0x0600">
+				<Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_CODEWIN"/>
+			</Group>
+		</Groups>
+
+		<Buttons>
+			<Button guid="guidCmdSet" id="LMCommandId" priority="0x0100" type="Button">
+				<Parent guid="guidCmdSet" id="MyMenuGroup" />
+				<Strings>
+					<ButtonText>LM Studio: Обработать запрос</ButtonText>
+				</Strings>
+			</Button>
+			<Button guid="guidCmdSet" id="InsertCommandId" priority="0x0101" type="Button">
+				<Parent guid="guidCmdSet" id="MyMenuGroup" />
+				<Strings>
+					<ButtonText>2. Insert AI Result</ButtonText>
+				</Strings>
+			</Button>
+		</Buttons>
+	</Commands>
+
+	<Symbols>
+		<GuidSymbol name="guidPackage" value="{aae692f9-ba51-46d0-bc60-c5a31fbb4c5d}" />
+		<GuidSymbol name="guidCmdSet" value="{7A94A48F-9C2B-42E9-8179-ED0C72668AF5}">
+			<IDSymbol name="MyMenuGroup" value="0x1020" />
+			<IDSymbol name="LMCommandId" value="0x0100" />
+			<IDSymbol name="InsertCommandId" value="0x0101" />
+		</GuidSymbol>
+	</Symbols>
+
+</CommandTable>
