@@ -15,25 +15,25 @@
 			<Button guid="guidCmdSet" id="LMCommandId" priority="0x0100" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>LM Studio: Обработать запрос</ButtonText>
+					<ButtonText>VibeCE Ask AI</ButtonText>
 				</Strings>
 			</Button>
 			<Button guid="guidCmdSet" id="InsertCommandId" priority="0x0101" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>2. Insert AI Result</ButtonText>
+					<ButtonText>VibeCE Paste AI Responce</ButtonText>
 				</Strings>
 			</Button>
 			<Button guid="guidCmdSet" id="AddContextCommandId" priority="0x0102" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>0. Add Current File to Context</ButtonText>
+					<ButtonText>VibeCE Add Current File to Context</ButtonText>
 				</Strings>
 			</Button>
 			<Button guid="guidCmdSet" id="ShowChatCommandId" priority="0x0103" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>AI Chat Window</ButtonText>
+					<ButtonText>VibeCE AI Chat Window</ButtonText>
 				</Strings>
 			</Button>
 		</Buttons>

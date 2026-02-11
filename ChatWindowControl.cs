@@ -157,6 +157,7 @@ namespace VibeCodingExtensionG1
             //btnSend.SetResourceReference(Control.BackgroundProperty, VsBrushes.ButtonBackgroundKey);
             //btnSend.SetResourceReference(Control.ForegroundProperty, VsBrushes.ButtonTextKey);
             //btnSend.SetResourceReference(Control.BorderBrushProperty, VsBrushes.ButtonBorderKey);
+
         }
 
         public void RefreshFilesList()
