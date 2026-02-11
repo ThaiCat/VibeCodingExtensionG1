@@ -1,4 +1,5 @@
 ﻿using Microsoft.VisualStudio.Shell;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -13,34 +14,45 @@ namespace VibeCodingExtensionG1
         private TextBox responseBox;
         private TextBox inputBox;
 
+        private System.Windows.Threading.DispatcherTimer longPressTimer;
+        private int pressDuration = 0;
+        private const int LongPressThreshold = 10; // 1 секунда (10 тиков по 100мс)
+        private Button btnClear;
+
         public ChatWindowControl()
         {
             Instance = this;
-            // Создаем интерфейс программно
             var grid = new Grid { Margin = new Thickness(10) };
 
-            // Добавляем еще одну строку сверху для списка файлов
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: Список файлов
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: Ответ
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: Сплиттер
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(100) }); // 3: Ввод
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 4: Кнопки
+            // 0: Список файлов (Авто-высота)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // 1: Поле ответа (Занимает всё свободное место)
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            // 2: Сплиттер (Тонкая полоска)
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
+            // 3: Поле ввода (Фиксированная высота)
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(100) });
+            // 4: Кнопки (Авто-высота)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-
-            //grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            //grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            //grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(100) });
-            //grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            // Панель для файлов (будет выглядеть как набор "тегов")
+            // --- 0: ПАНЕЛЬ ФАЙЛОВ ---
             filesPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 5)
+                // Обернем в ScrollViewer на случай, если файлов будет много
+                Margin = new Thickness(0, 0, 0, 10),
+                MinHeight = 25
             };
-            Grid.SetRow(filesPanel, 0);
-            grid.Children.Add(filesPanel);
+            var fileScroll = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = filesPanel,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            Grid.SetRow(fileScroll, 0);
+            grid.Children.Add(fileScroll);
 
-
+            // --- 1: ПОЛЕ ОТВЕТА ---
             responseBox = new TextBox
             {
                 IsReadOnly = true,
@@ -48,31 +60,80 @@ namespace VibeCodingExtensionG1
                 AcceptsReturn = true,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
-            Grid.SetRow(responseBox, 0);
+            Grid.SetRow(responseBox, 1); // ТУТ ВАЖНО: индекс 1
+            grid.Children.Add(responseBox);
 
+            // --- 2: СПЛИТТЕР ---
+            var splitter = new GridSplitter
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Background = Brushes.Transparent,
+                Height = 5
+            };
+            Grid.SetRow(splitter, 2);
+            grid.Children.Add(splitter);
+
+            // --- 3: ПОЛЕ ВВОДА ---
             inputBox = new TextBox
             {
                 TextWrapping = TextWrapping.Wrap,
                 AcceptsReturn = true,
                 Margin = new Thickness(0, 5, 0, 0)
             };
-            Grid.SetRow(inputBox, 2);
+            Grid.SetRow(inputBox, 3); // ТУТ ВАЖНО: индекс 3
+            grid.Children.Add(inputBox);
 
-            var btnSend = new Button
+            // --- 4: КНОПКИ ---
+
+            var btnDock = new DockPanel
             {
-                Content = "Send to AI",
-                Padding = new Thickness(10, 5, 0,0),
                 Margin = new Thickness(0, 5, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Right
+                LastChildFill = false // Чтобы кнопки не растягивались на всё пространство
+            };
+
+
+            btnClear = new Button
+            {
+                Content = "Clear Context",
+                Padding = new Thickness(5, 3, 5, 3),
+                //Margin = new Thickness(0, 5, 5, 0),
+                MinWidth = 80,
+                //Opacity = 0.7 // Немного приглушим, чтобы не отвлекала
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            // События нажатия
+            btnClear.PreviewMouseDown += (s, e) => StartLongPress();
+            btnClear.PreviewMouseUp += (s, e) => StopLongPress();
+            btnClear.MouseLeave += (s, e) => StopLongPress();
+
+            // Таймер для отсчета
+            longPressTimer = new System.Windows.Threading.DispatcherTimer();
+            longPressTimer.Interval = TimeSpan.FromMilliseconds(100);
+            longPressTimer.Tick += LongPressTimer_Tick;
+
+            DockPanel.SetDock(btnClear, Dock.Left); // Прижимаем к левому краю
+
+            var btnSend = new Button 
+            { 
+                Content = "Send to AI", 
+                Padding = new Thickness(5, 3, 5, 3), 
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                MinWidth = 100
             };
             btnSend.Click += (s, e) => SendToAi();
-            Grid.SetRow(btnSend, 3);
 
-            grid.Children.Add(responseBox);
-            grid.Children.Add(inputBox);
-            grid.Children.Add(btnSend);
+            DockPanel.SetDock(btnSend, Dock.Right); // Прижимаем к правому краю
 
-            this.Content = grid; 
+            // Добавляем в панель
+            btnDock.Children.Add(btnClear);
+            btnDock.Children.Add(btnSend);
+
+            Grid.SetRow(btnDock, 4);
+            grid.Children.Add(btnDock);
+
+            this.Content = grid;
             RefreshFilesList();
 
 
@@ -88,30 +149,43 @@ namespace VibeCodingExtensionG1
 
             inputBox.SetResourceReference(Control.BackgroundProperty, VsBrushes.WindowKey);
             inputBox.SetResourceReference(Control.ForegroundProperty, VsBrushes.WindowTextKey);
+
+            //btnSend.SetResourceReference(Control.BackgroundProperty, VsBrushes.CaptionBackgroundKey);
+            //btnSend.SetResourceReference(Control.ForegroundProperty, VsBrushes.ButtonTextKey);
+            //btnSend.SetResourceReference(Control.BorderBrushProperty, VsBrushes.DockTargetButtonBorderKey);
+
+            //btnSend.SetResourceReference(Control.BackgroundProperty, VsBrushes.ButtonBackgroundKey);
+            //btnSend.SetResourceReference(Control.ForegroundProperty, VsBrushes.ButtonTextKey);
+            //btnSend.SetResourceReference(Control.BorderBrushProperty, VsBrushes.ButtonBorderKey);
         }
 
         public void RefreshFilesList()
         {
+            if (filesPanel == null) return;
             filesPanel.Children.Clear();
+
             foreach (var fileName in LMCommand.ContextFiles.Keys)
             {
                 var border = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromRgb(60, 60, 60)),
-                    CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(Color.FromRgb(45, 45, 48)), // Цвет VS Header
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0, 122, 204)), // Синий акцент VS
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(2),
                     Margin = new Thickness(0, 0, 5, 0),
-                    Padding = new Thickness(5, 2, 5, 2)
+                    Padding = new Thickness(8, 4, 8, 4),
+                    Cursor = System.Windows.Input.Cursors.Hand,
+                    ToolTip = "Нажмите, чтобы удалить из контекста"
                 };
 
                 var txt = new TextBlock
                 {
                     Text = fileName,
-                    FontSize = 10,
-                    Foreground = Brushes.LightGray
+                    FontSize = 11,
+                    Foreground = Brushes.White
                 };
                 border.Child = txt;
 
-                // Кнопка удаления файла из контекста при клике
                 border.MouseDown += (s, e) => {
                     LMCommand.ContextFiles.Remove(fileName);
                     RefreshFilesList();
@@ -123,7 +197,19 @@ namespace VibeCodingExtensionG1
 
         private void SendToAi()
         {
-            string text = inputBox.Text;
+            string text = inputBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            // Текстовая команда очистки
+            if (text.ToLower() == "/clear")
+            {
+                ClearAllContext();
+                inputBox.Clear();
+                return;
+            }
+
+
+            //string text = inputBox.Text;
             if (string.IsNullOrWhiteSpace(text)) return;
 
             responseBox.AppendText($"\nUser: {text}\n");
@@ -138,5 +224,52 @@ namespace VibeCodingExtensionG1
                 responseBox.ScrollToEnd();
             });
         }
+
+
+        private void ClearAllContext()
+        {
+            LMCommand.ContextFiles.Clear();
+            RefreshFilesList();
+            responseBox.AppendText("\n[Система]: Весь контекст очищен.\n");
+        }
+
+        private void StartLongPress()
+        {
+            pressDuration = 0;
+            longPressTimer.Start();
+            btnClear.Content = "Hold... [0%]";
+        }
+
+        private void StopLongPress()
+        {
+            longPressTimer.Stop();
+            pressDuration = 0;
+            btnClear.Content = "Clear Context";
+            //btnClear.Opacity = 0.7;
+        }
+
+        private void LongPressTimer_Tick(object sender, EventArgs e)
+        {
+            pressDuration++;
+            int progress = pressDuration * 10; // Процент
+
+            if (progress <= 100)
+            {
+                btnClear.Content = $"Hold... [{progress}%]";
+                //btnClear.Opacity = 0.7 + (progress / 333.0); // Постепенно становится ярче
+            }
+
+            if (pressDuration >= LongPressThreshold)
+            {
+                StopLongPress();
+                ClearAllContext();
+                // Визуальный эффект успешной очистки
+                btnClear.Content = "CLEARED!";
+            }
+        }
+
+
+
+
     }
 }
