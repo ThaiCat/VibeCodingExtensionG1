@@ -1,145 +1,147 @@
 ﻿using System;
 using System.ComponentModel.Design;
-using System.Globalization;
-using System.IO;
 using System.Net.Http;
-using System.Runtime.Serialization.Json;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Web; // Требует ссылки на System.Web
-using EnvDTE;
-using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using System.Text.Json;
+using EnvDTE;
+using EnvDTE80;
+using System.Web;
+using System.Text.Json; // Используем для надежного парсинга больших ответов
 
 namespace VibeCodingExtensionG1
 {
     internal sealed class LMCommand
     {
-        public const int CommandId = 0x0100; 
-        public const int InsertCommandId = 0x0101; // ID должен совпадать с VSCT
+        // Идентификаторы команд должны совпадать с файлом magic.vsct
+        public const int AskCommandId = 0x0100;
+        public const int InsertCommandId = 0x0101;
         public static readonly Guid CommandSet = new Guid("7A94A48F-9C2B-42E9-8179-ED0C72668AF5");
 
         private readonly AsyncPackage package;
+
+        // Статичное хранилище: живет всё время, пока открыта Visual Studio
         private static string lastAiResponse = string.Empty;
-        // Статичный клиент с преднастроенным таймаутом
-        //private static readonly HttpClient client = new HttpClient (){ Timeout = TimeSpan.FromSeconds(1200) }; 
-        
+
+        // Статичный клиент: один на всё расширение, чтобы не перегружать сеть
         private static readonly HttpClient client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(1200),
-            MaxResponseContentBufferSize = 1024 * 1024 // 1 МБ лимит на ответ
+            Timeout = TimeSpan.FromSeconds(150), // Увеличили для больших ответов
+            MaxResponseContentBufferSize = 10 * 1024 * 1024 // Разрешаем до 10МБ данных
         };
-
 
         private LMCommand(AsyncPackage package, OleMenuCommandService commandService)
         {
-            this.package = package ?? throw new ArgumentNullException(nameof(package));
+            this.package = package;
 
-            // Команда 1: Запрос
-            var menuCommandID1 = new CommandID(CommandSet, CommandId);
-            var menuItem1 = new MenuCommand(this.ExecuteRequest, menuCommandID1);
-            commandService.AddCommand(menuItem1);
+            // Регистрируем кнопку 1 (Запрос)
+            var askID = new CommandID(CommandSet, AskCommandId);
+            var askItem = new MenuCommand(this.ExecuteAsk, askID);
+            commandService.AddCommand(askItem);
 
-            // Команда 2: Вставка
-            var menuCommandID2 = new CommandID(CommandSet, InsertCommandId);
-            var menuItem2 = new MenuCommand(this.ExecuteInsert, menuCommandID2);
-            commandService.AddCommand(menuItem2);
+            // Регистрируем кнопку 2 (Вставка)
+            var insertID = new CommandID(CommandSet, InsertCommandId);
+            var insertItem = new MenuCommand(this.ExecuteInsert, insertID);
+            commandService.AddCommand(insertItem);
         }
 
         public static LMCommand Instance { get; private set; }
 
         public static async Task InitializeAsync(AsyncPackage package)
         {
+            // ПЕРЕКЛЮЧЕНИЕ: На UI поток для регистрации команд в меню
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
             OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
             Instance = new LMCommand(package, commandService);
         }
 
-        private void ExecuteRequest(object sender, EventArgs e)
+        // --- ЛОГИКА ПЕРВОЙ КНОПКИ (ASK AI) ---
+        private void ExecuteAsk(object sender, EventArgs e)
         {
+            // ТОЧКА ВХОДА: UI Поток (пользователь нажал на меню)
+
+            // Запускаем асинхронную цепочку через фабрику задач VS
             ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
             {
-                await ProcessRequestAsync();
+                await ProcessAskInternalAsync();
             });
         }
 
-
-        private async Task ProcessRequestAsync()
+        private async Task ProcessAskInternalAsync()
         {
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
+            // МЫ НАХОДИТЕСЬ В: UI Потоке.
+            // Нужно переключиться на него явно на случай, если RunAsync начал выполнение иначе.
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
             var dte = await package.GetServiceAsync(typeof(SDTE)) as DTE2;
+            if (dte?.ActiveDocument == null) return;
 
-            // Получаем URL из настроек
-            var options = (OptionPageGrid)package.GetDialogPage(typeof(OptionPageGrid));
-            string url = options.ApiUrl;
-
-            // ... (код получения selectedText и fullCode) ...
-
-            if (!(dte?.ActiveDocument?.Selection is TextSelection selection) || string.IsNullOrEmpty(selection.Text))
+            // Читаем выделение (ТОЛЬКО в UI потоке!)
+            TextSelection selection = dte.ActiveDocument.Selection as TextSelection;
+            if (selection == null || string.IsNullOrEmpty(selection.Text))
             {
-                dte.StatusBar.Text = "Выделите код для запроса!";
+                dte.StatusBar.Text = "Сначала выделите код!";
                 return;
             }
 
-            string selectedText = selection.Text;
-            dte.StatusBar.Text = "LM Studio: Генерирую...";
+            string codeToProcess = selection.Text;
+            dte.StatusBar.Text = "LM Studio: Отправка запроса...";
 
             try
             {
-                // Отправляем запрос в фоне
-                string result = await Task.Run(async () => await CallLMStudioAsync(selectedText, ""));
-
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                if (!string.IsNullOrEmpty(result))
+                // ПЕРЕКЛЮЧЕНИЕ: Уходим в Фоновый Поток (Background Thread)
+                // Используем Task.Run, чтобы сетевое ожидание не "фризило" интерфейс Visual Studio.
+                string aiResult = await Task.Run(async () =>
                 {
-                    // 1. Сохраняем в переменную для кнопки вставки
-                    lastAiResponse = result;
+                    // ТУТ МЫ В ФОНЕ: Ждем ответа от сервера 30-120 секунд. 
+                    // VS в это время отзывчива, пользователь может работать.
+                    return await CallLMStudioAsync(codeToProcess);
+                });
 
-                    // 2. Сохраняем в настройки (можно посмотреть через Tools -> Options)
-                    options.LastResponse = result;
-                    options.SaveSettingsToStorage();
+                // ПЕРЕКЛЮЧЕНИЕ: Возвращаемся в UI Поток
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                    // 3. Дублируем в Output Window (Ctrl+Alt+O)
-                    LogToOutputWindow("--- NEW AI RESPONSE ---\n" + result + "\n--- END ---");
+                if (!string.IsNullOrEmpty(aiResult) && !aiResult.StartsWith("Ошибка:"))
+                {
+                    lastAiResponse = aiResult; // Сохраняем "в карман"
+                    dte.StatusBar.Text = "Ответ получен! Нажмите 'Insert AI Result'.";
 
-                    dte.StatusBar.Text = "Ответ получен и сохранен в памяти и в Output Window.";
+                    // Также выводим в окно вывода, чтобы ответ можно было увидеть "как есть"
+                    LogToOutputWindow(aiResult);
                 }
                 else
                 {
-                    dte.StatusBar.Text = result ?? "Ошибка связи";
+                    dte.StatusBar.Text = aiResult ?? "Неизвестная ошибка";
                 }
             }
             catch (Exception ex)
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                dte.StatusBar.Text = "Error: " + ex.Message;
+                dte.StatusBar.Text = "Критический сбой: " + ex.Message;
             }
         }
+
+        // --- ЛОГИКА ВТОРОЙ КНОПКИ (INSERT) ---
         private void ExecuteInsert(object sender, EventArgs e)
         {
+            // МЫ В: UI Потоке. 
+            // Вставка текста в редактор — это работа с UI, фоновые потоки тут запрещены.
             ThreadHelper.ThrowIfNotOnUIThread();
 
-            var dte = Package.GetGlobalService(typeof(SDTE)) as DTE2;
             if (string.IsNullOrEmpty(lastAiResponse))
             {
-                dte.StatusBar.Text = "Сначала получите ответ (кнопка 1).";
                 return;
             }
 
+            var dte = Package.GetGlobalService(typeof(SDTE)) as DTE2;
             if (dte?.ActiveDocument?.Selection is TextSelection selection)
             {
-                dte.UndoContext.Open("AI_Insert");
+                // Открываем транзакцию отмены (чтобы Ctrl+Z работал корректно)
+                dte.UndoContext.Open("AI Code Insertion");
                 try
                 {
                     selection.Insert(lastAiResponse);
-                    dte.StatusBar.Text = "Код вставлен.";
-                }
-                catch (Exception ex)
-                {
-                    LogToOutputWindow("Insert Error: " + ex.Message);
                 }
                 finally
                 {
@@ -148,83 +150,52 @@ namespace VibeCodingExtensionG1
             }
         }
 
-        private async Task<string> CallLMStudioAsync(string selectedText, string context)
+        private async Task<string> CallLMStudioAsync(string prompt)
         {
+            // МЫ В: Фоновом потоке.
             try
             {
-                // 1. Упрощаем промпт для теста, чтобы нейросеть ответила мгновенно
-                string prompt = "Fix this C# code: " + selectedText;
-                string escapedPrompt = HttpUtility.JavaScriptStringEncode(prompt);
+                // Экранируем текст для JSON
+                string escaped = HttpUtility.JavaScriptStringEncode(prompt);
+                string jsonPayload = "{\"model\":\"local-model\",\"messages\":[{\"role\":\"user\",\"content\":\"" + escaped + "\"}],\"temperature\":0.7}";
 
-                string json = "{\"model\":\"local-model\",\"messages\":[{\"role\":\"user\",\"content\":\"" + escapedPrompt + "\"}],\"temperature\":0.3}";
-
-                //using (var localClient = new HttpClient())
-                using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
+                using (var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
                 {
-                    // 2. Увеличиваем таймаут до 2 минут (120 секунд)
-                    //client.Timeout = TimeSpan.FromSeconds(120);
-
-                    // 3. Проверьте адрес! В некоторых версиях LM Studio адрес может быть http://127.0.0.1:1234/v1/...
-                    var response = await client.PostAsync("http://localhost:1234/v1/chat/completions", content);
+                    // Выполняем HTTP POST запрос
+                    var response = await client.PostAsync("http://127.0.0.1:1234/v1/chat/completions", content);
 
                     if (!response.IsSuccessStatusCode)
-                        return "Ошибка сервера: " + response.StatusCode;
+                        return "Ошибка сети: " + response.StatusCode;
 
-                    string respString = await response.Content.ReadAsStringAsync();
-                    LogToOutputWindow("RAW JSON FROM SERVER:\n" + respString); // Добавьте это временно для отладки
-                    return ParseJsonContent(respString);
-                }
-            
-            }
-            catch (TaskCanceledException)
-            {
-                return "Ошибка: Нейросеть отвечала слишком долго (Таймаут).";
-            }
-            catch (Exception ex)
-            {
-                return "Ошибка сети: " + ex.Message;
-            }
-        }
+                    string jsonResponse = await response.Content.ReadAsStringAsync();
 
-        private string ParseJsonContent(string json)
-        {
-            try
-            {
-                using (JsonDocument doc = JsonDocument.Parse(json))
-                {
-                    // Идем по пути choices[0].message.content
-                    JsonElement root = doc.RootElement;
-                    if (root.TryGetProperty("choices", out JsonElement choices) && choices.GetArrayLength() > 0)
+                    // Парсим результат через System.Text.Json (надежно для больших текстов)
+                    using (JsonDocument doc = JsonDocument.Parse(jsonResponse))
                     {
-                        JsonElement firstChoice = choices[0];
-                        if (firstChoice.TryGetProperty("message", out JsonElement message))
-                        {
-                            if (message.TryGetProperty("content", out JsonElement content))
-                            {
-                                return content.GetString();
-                            }
-                        }
+                        return doc.RootElement
+                                  .GetProperty("choices")[0]
+                                  .GetProperty("message")
+                                  .GetProperty("content")
+                                  .GetString();
                     }
                 }
             }
             catch (Exception ex)
             {
-                return "Ошибка парсинга JSON: " + ex.Message + "\nСырой ответ: " +
-                       (json.Length > 100 ? json.Substring(0, 100) + "..." : json);
+                return "Ошибка: " + ex.Message;
             }
-            return "Ошибка: Не удалось найти поле content в ответе.";
         }
-
 
         private void LogToOutputWindow(string message)
         {
+            // МЫ В: UI Потоке (требуется для доступа к окнам VS)
             ThreadHelper.ThrowIfNotOnUIThread();
             IVsOutputWindow outWindow = Package.GetGlobalService(typeof(SVsOutputWindow)) as IVsOutputWindow;
-            Guid paneGuid = new Guid("B532450C-8D63-42D0-9118-208151D36980"); // Произвольный GUID
-            outWindow.CreatePane(ref paneGuid, "Vibe AI", 1, 1);
+            Guid paneGuid = new Guid("A1B2C3D4-E5F6-4A5B-8C9D-E0F1A2B3C4D5");
+            outWindow.CreatePane(ref paneGuid, "AI Response Log", 1, 1);
             outWindow.GetPane(ref paneGuid, out IVsOutputWindowPane pane);
-            pane?.OutputStringThreadSafe(message + "\n");
-            pane?.Activate(); // Сфокусироваться на окне
+            pane?.OutputStringThreadSafe("\n--- NEW RESPONSE ---\n" + message + "\n");
+            pane?.Activate();
         }
     }
 }
