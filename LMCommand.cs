@@ -33,6 +33,7 @@ namespace VibeCodingExtensionG1
             MaxResponseContentBufferSize = 1024 * 1024 // 1 МБ лимит на ответ
         };
 
+
         private LMCommand(AsyncPackage package, OleMenuCommandService commandService)
         {
             this.package = package ?? throw new ArgumentNullException(nameof(package));
