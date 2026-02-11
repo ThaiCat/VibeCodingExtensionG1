@@ -27,7 +27,7 @@ namespace VibeCodingExtensionG1
         // Статичный клиент: один на всё расширение, чтобы не перегружать сеть
         private static readonly HttpClient client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(150), // Увеличили для больших ответов
+            Timeout = TimeSpan.FromSeconds(1500), // Увеличили для больших ответов
             MaxResponseContentBufferSize = 10 * 1024 * 1024 // Разрешаем до 10МБ данных
         };
 
