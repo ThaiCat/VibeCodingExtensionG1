@@ -8,6 +8,6 @@ public class ChatWindow : ToolWindowPane
     public ChatWindow() : base(null)
     {
         this.Caption = "AI Chat Context";
-        this.Content = new ChatWindowControl();
+        //this.Content = new ChatWindowControl();
     }
 }
