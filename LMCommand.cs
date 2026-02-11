@@ -82,6 +82,13 @@ namespace VibeCodingExtensionG1
             Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(windowFrame.Show());
         }
 
+        public async Task<string> CallAiFromChatAsync(string prompt)
+        {
+            // Здесь логика почти такая же, как в CallLMStudioAsync, 
+            // только вместо 'selectedCode' мы используем 'prompt' из окна чата
+            return await CallLMStudioAsync(prompt);
+        }
+
         // --- ЛОГИКА ПЕРВОЙ КНОПКИ (ASK AI) ---
         private void ExecuteAsk(object sender, EventArgs e)
         {
@@ -340,5 +347,6 @@ namespace VibeCodingExtensionG1
             pane?.OutputStringThreadSafe("\n--- NEW RESPONSE ---\n" + message + "\n");
             pane?.Activate();
         }
+
     }
 }

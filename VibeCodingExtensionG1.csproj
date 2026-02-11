@@ -65,6 +65,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ChatWindow.cs" />
+    <Compile Include="ChatWindowControl.cs" />
     <Compile Include="LMCommand.cs" />
     <Compile Include="OptionPageGrid.cs">
       <SubType>Component</SubType>
