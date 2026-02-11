@@ -16,9 +16,9 @@ namespace VibeCodingExtensionG1
 {
     internal sealed class LMCommand
     {
-        // Идентификаторы команд должны совпадать с файлом magic.vsct
-        public const int AskCommandId = 0x0100;
-        public const int InsertCommandId = 0x0101;
+        private static string contextCode = string.Empty;
+        private static string contextFileName = string.Empty;
+
         public static readonly Guid CommandSet = new Guid("7A94A48F-9C2B-42E9-8179-ED0C72668AF5");
 
         private readonly AsyncPackage package;
@@ -35,17 +35,16 @@ namespace VibeCodingExtensionG1
 
         private LMCommand(AsyncPackage package, OleMenuCommandService commandService)
         {
-            this.package = package;
+            this.package = package ?? throw new ArgumentNullException(nameof(package));
 
-            // Регистрируем кнопку 1 (Запрос)
-            var askID = new CommandID(CommandSet, AskCommandId);
-            var askItem = new MenuCommand(this.ExecuteAsk, askID);
-            commandService.AddCommand(askItem);
-
-            // Регистрируем кнопку 2 (Вставка)
-            var insertID = new CommandID(CommandSet, InsertCommandId);
-            var insertItem = new MenuCommand(this.ExecuteInsert, insertID);
-            commandService.AddCommand(insertItem);
+            if (commandService != null)
+            {
+                // Идентификаторы команд должны совпадать с файлом magic.vsct
+                // Используем константы напрямую. Это и есть "инлайнинг" в контексте VS SDK.
+                commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
+                commandService.AddCommand(new MenuCommand(ExecuteInsert, new CommandID(CommandSet, 0x0101)));
+                commandService.AddCommand(new MenuCommand(ExecuteAddFile, new CommandID(CommandSet, 0x0102)));
+            }
         }
 
         public static LMCommand Instance { get; private set; }
@@ -79,6 +78,33 @@ namespace VibeCodingExtensionG1
             {
                 await ProcessAskInternalAsync();
             });
+        }
+
+        private void ExecuteAddFile(object sender, EventArgs e)
+        {
+            // ТОЧКА ВХОДА: UI Поток (пользователь нажал на меню)
+
+            // Запускаем асинхронную цепочку через фабрику задач VS
+            ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+            {
+                await ProcessAddContextAsync();
+            });
+        }
+
+        private async Task ProcessAddContextAsync()
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            var dte = await package.GetServiceAsync(typeof(SDTE)) as DTE2;
+
+            if (dte?.ActiveDocument != null)
+            {
+                var textDoc = dte.ActiveDocument.Object("TextDocument") as TextDocument;
+                var editPoint = textDoc.StartPoint.CreateEditPoint();
+                contextCode = editPoint.GetText(textDoc.EndPoint);
+                contextFileName = dte.ActiveDocument.Name;
+
+                dte.StatusBar.Text = $"Контекст файла '{contextFileName}' сохранен.";
+            }
         }
 
         private async Task ProcessAskInternalAsync()
@@ -167,25 +193,49 @@ namespace VibeCodingExtensionG1
                 }
             }
         }
-
-        private async Task<string> CallLMStudioAsync(string prompt)
+        private async Task<string> CallLMStudioAsync(string selectedCode)
         {
-            // МЫ В: Фоновом потоке.
             try
             {
-                // Экранируем текст для JSON
-                string escaped = HttpUtility.JavaScriptStringEncode(prompt);
-                string jsonPayload = "{\"model\":\"local-model\",\"messages\":[{\"role\":\"user\",\"content\":\"" + escaped + "\"}],\"temperature\":0.7}";
+                var messages = new System.Collections.Generic.List<object>();
+
+                // Если мы ранее "запомнили" файл, добавляем его первым
+                if (!string.IsNullOrEmpty(contextCode))
+                {
+                    messages.Add(new
+                    {
+                        role = "system",
+                        content = $"CONTEXT FILE ({contextFileName}):\n\n{contextCode}"
+                    });
+                }
+
+                // Добавляем само выделение и вопрос
+                messages.Add(new
+                {
+                    role = "user",
+                    content = $"Ниже приведен фрагмент кода. Проанализируй его, учитывая контекст выше (если есть):\n\n{selectedCode}"
+                });
+
+                var payload = new
+                {
+                    model = "local-model",
+                    messages = messages,
+                    temperature = 0.7,
+                    max_tokens = -1 // Даем ИИ свободу в длине ответа
+                };
+
+                var serializer = new JavaScriptSerializer();
+                string jsonPayload = serializer.Serialize(payload);
 
                 using (var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
                 {
-                    // Выполняем HTTP POST запрос
                     var response = await client.PostAsync("http://127.0.0.1:1234/v1/chat/completions", content);
+                    // ... далее ваш парсинг без изменений ...
 
                     if (!response.IsSuccessStatusCode)
                         return "Ошибка сети: " + response.StatusCode;
 
-                    string jsonResponse = await response.Content.ReadAsStringAsync(); 
+                    string jsonResponse = await response.Content.ReadAsStringAsync();
                     await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                     LogToOutputWindow("RAW JSON: " + jsonResponse);
 
@@ -193,11 +243,39 @@ namespace VibeCodingExtensionG1
                     return ParseJsonContent(jsonResponse);
                 }
             }
-            catch (Exception ex)
-            {
-                return "Ошибка: " + ex.Message;
-            }
+            catch (Exception ex) { return "Ошибка: " + ex.Message; }
         }
+
+        //private async Task<string> CallLMStudioAsync(string prompt)
+        //{
+        //    // МЫ В: Фоновом потоке.
+        //    try
+        //    {
+        //        // Экранируем текст для JSON
+        //        string escaped = HttpUtility.JavaScriptStringEncode(prompt);
+        //        string jsonPayload = "{\"model\":\"local-model\",\"messages\":[{\"role\":\"user\",\"content\":\"" + escaped + "\"}],\"temperature\":0.7}";
+
+        //        using (var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
+        //        {
+        //            // Выполняем HTTP POST запрос
+        //            var response = await client.PostAsync("http://127.0.0.1:1234/v1/chat/completions", content);
+
+        //            if (!response.IsSuccessStatusCode)
+        //                return "Ошибка сети: " + response.StatusCode;
+
+        //            string jsonResponse = await response.Content.ReadAsStringAsync(); 
+        //            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+        //            LogToOutputWindow("RAW JSON: " + jsonResponse);
+
+        //            // Парсим результат через System.Text.Json (надежно для больших текстов)
+        //            return ParseJsonContent(jsonResponse);
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return "Ошибка: " + ex.Message;
+        //    }
+        //}
 
         private string ParseJsonContent(string json)
         {
