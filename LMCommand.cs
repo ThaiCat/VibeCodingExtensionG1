@@ -1,12 +1,14 @@
-﻿using System;
+﻿using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Shell.Interop;
-using EnvDTE;
-using EnvDTE80;
 using System.Web;
 using System.Web.Script.Serialization; // Добавь этот using
 
@@ -113,13 +115,18 @@ namespace VibeCodingExtensionG1
                 // ПЕРЕКЛЮЧЕНИЕ: Возвращаемся в UI Поток
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-                if (!string.IsNullOrEmpty(aiResult) && !aiResult.StartsWith("Ошибка:"))
+                if (!string.IsNullOrEmpty(aiResult))
                 {
                     lastAiResponse = aiResult; // Сохраняем "в карман"
-                    dte.StatusBar.Text = "Ответ получен! Нажмите 'Insert AI Result'.";
+                                                                  
+                    // Сохраняем в настройки, чтобы увидеть "Full AI Response"
+                    var options = (OptionPageGrid)package.GetDialogPage(typeof(OptionPageGrid));
+                    options.LastResponse = aiResult;
+                    options.SaveSettingsToStorage();
 
                     // Также выводим в окно вывода, чтобы ответ можно было увидеть "как есть"
-                    LogToOutputWindow(aiResult);
+                    LogToOutputWindow(aiResult); 
+                    dte.StatusBar.Text = "Ответ получен! Можно вставлять.";
                 }
                 else
                 {
@@ -178,7 +185,9 @@ namespace VibeCodingExtensionG1
                     if (!response.IsSuccessStatusCode)
                         return "Ошибка сети: " + response.StatusCode;
 
-                    string jsonResponse = await response.Content.ReadAsStringAsync();
+                    string jsonResponse = await response.Content.ReadAsStringAsync(); 
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    LogToOutputWindow("RAW JSON: " + jsonResponse);
 
                     // Парсим результат через System.Text.Json (надежно для больших текстов)
                     return ParseJsonContent(jsonResponse);
@@ -195,21 +204,33 @@ namespace VibeCodingExtensionG1
             try
             {
                 var serializer = new JavaScriptSerializer();
-                // Динамически парсим в словарь
-                var result = serializer.Deserialize<dynamic>(json);
 
-                // В LM Studio структура такая: choices[0].message.content
-                // JavaScriptSerializer выдает вложенные Dictionary и ArrayList
-                var choices = result["choices"] as System.Collections.ArrayList;
-                var firstChoice = choices[0] as System.Collections.IDictionary;
-                var message = firstChoice["message"] as System.Collections.IDictionary;
+                // Парсим в обычный словарь (object в данном случае будет Dictionary<string, object>)
+                var result = serializer.Deserialize<IDictionary<string, object>>(json);
 
-                return message["content"].ToString();
+                // Пошагово вытаскиваем данные с приведением типов
+                if (result.TryGetValue("choices", out object choicesObj))
+                {
+                    var choices = choicesObj as ArrayList;
+                    if (choices != null && choices.Count > 0)
+                    {
+                        var firstChoice = choices[0] as IDictionary<string, object>;
+                        if (firstChoice != null && firstChoice.TryGetValue("message", out object messageObj))
+                        {
+                            var message = messageObj as IDictionary<string, object>;
+                            if (message != null && message.TryGetValue("content", out object content))
+                            {
+                                return content.ToString();
+                            }
+                        }
+                    }
+                }
+
+                return "Ошибка: Не удалось найти контент в JSON. Проверьте лог LM Studio.";
             }
             catch (Exception ex)
             {
-                // Если что-то пошло не так, вернем сырой текст для отладки
-                return "Ошибка парсинга: " + ex.Message + "\nСырой ответ: " + json;
+                return "Ошибка парсинга: " + ex.Message;
             }
         }
 
