@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace VibeCodingExtensionG1
@@ -23,8 +24,12 @@ namespace VibeCodingExtensionG1
         private const int LongPressThreshold = 10; // 1 секунда (10 тиков по 100мс)
         private Button btnClear;
 
+        private TextBox zoomInput;
+        private double currentZoom = 1.0; // 1.0 = 100% (12px)
+
         public ChatWindowControl()
         {
+
             Instance = this;
             var grid = new Grid { Margin = new Thickness(10) };
 
@@ -140,6 +145,40 @@ namespace VibeCodingExtensionG1
 
             DockPanel.SetDock(btnSend, Dock.Right); // Прижимаем к правому краю
 
+
+
+
+
+
+
+            // В конструкторе, там где создаем кнопки:
+            zoomInput = new TextBox
+            {
+                Text = "100%",
+                Width = 50,
+                Margin = new Thickness(10, 0, 10, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                HorizontalContentAlignment = HorizontalAlignment.Center
+            };
+
+            // Привязываем событие изменения текста
+            zoomInput.TextChanged += (s, e) => {
+                string val = zoomInput.Text.Replace("%", "");
+                if (double.TryParse(val, out double percent))
+                {
+                    ApplyZoom(percent / 100.0);
+                }
+            };
+
+            // Добавляем в Dock (между кнопками)
+            DockPanel.SetDock(zoomInput, Dock.Left);
+            btnDock.Children.Add(zoomInput);
+
+
+
+
+
+
             // Добавляем в панель
             btnDock.Children.Add(btnClear);
             btnDock.Children.Add(btnSend);
@@ -172,6 +211,8 @@ namespace VibeCodingExtensionG1
             //btnSend.SetResourceReference(Control.ForegroundProperty, VsBrushes.ButtonTextKey);
             //btnSend.SetResourceReference(Control.BorderBrushProperty, VsBrushes.ButtonBorderKey);
 
+            // В конструкторе добавь:
+            this.PreviewMouseWheel += ChatWindowControl_PreviewMouseWheel;
         }
 
         public void RefreshFilesList()
@@ -207,6 +248,56 @@ namespace VibeCodingExtensionG1
                 };
 
                 filesPanel.Children.Add(border);
+            }
+        }
+
+        private void ApplyZoom(double zoom)
+        {
+            if (zoom < 0.2) zoom = 0.2; // Минимум 20%
+            if (zoom > 5.0) zoom = 5.0; // Максимум 500%
+
+            currentZoom = zoom;
+            double newSize = 12 * zoom;
+
+            responseBox.FontSize = newSize;
+            inputBox.FontSize = newSize;
+
+            // Применяем ко всему содержимому истории чата
+            var range = new TextRange(responseBox.Document.ContentStart, responseBox.Document.ContentEnd);
+            range.ApplyPropertyValue(TextElement.FontSizeProperty, newSize);
+
+            // Обновляем текст в поле, если он не в фокусе (чтобы не мешать вводу)
+            if (!zoomInput.IsFocused)
+            {
+                zoomInput.Text = $"{(int)(zoom * 100)}%";
+            }
+        }
+        //private void ApplyZoom(double zoom)
+        //{
+        //    // ... расчет newSize ...
+
+        //    inputBox.FontSize = newSize;
+
+        //    // Применяем ко всему содержимому истории чата
+        //    var range = new TextRange(responseBox.Document.ContentStart, responseBox.Document.ContentEnd);
+        //    range.ApplyPropertyValue(TextElement.FontSizeProperty, newSize);
+
+        //    // И устанавливаем дефолт для будущих сообщений
+        //    responseBox.FontSize = newSize;
+        //}
+        // Сам метод:
+        private void ChatWindowControl_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                e.Handled = true; // Отменяем стандартный скролл
+
+                if (e.Delta > 0)
+                    ApplyZoom(currentZoom + 0.1); // Крупнее
+                else
+                    ApplyZoom(currentZoom - 0.1); // Мельче
+
+                zoomInput.Text = $"{(int)(currentZoom * 100)}%";
             }
         }
 
