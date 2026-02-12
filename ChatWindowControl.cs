@@ -379,27 +379,37 @@ namespace VibeCodingExtensionG1
                 paragraph.Inlines.Add(new Bold(new Run("AI: ")) { Foreground = Brushes.LightGreen });
                 paragraph.Inlines.Add(new LineBreak());
 
-                string[] parts = text.Split(new[] { "```" }, StringSplitOptions.None);
-                for (int i = 0; i < parts.Length; i++)
+                // Регулярка ищет блоки: ```(язык)?(код)``` 
+                // Singleline нужен, чтобы точка ловила переносы строк внутри кода
+                var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n?(.*?)\r?\n?```",
+                    System.Text.RegularExpressions.RegexOptions.Singleline);
+
+                int lastIndex = 0;
+                var matches = codeRegex.Matches(text);
+
+                foreach (System.Text.RegularExpressions.Match match in matches)
                 {
-                    if (i % 2 == 1) // БЛОК КОДА
+                    // 1. Добавляем обычный текст ДО блока кода
+                    string plainText = text.Substring(lastIndex, match.Index - lastIndex);
+                    if (!string.IsNullOrEmpty(plainText))
                     {
-                        // Очищаем от названия языка (например, ```csharp)
-                        string code = parts[i];
-                        if (code.Contains("\n")) code = code.Substring(code.IndexOf('\n')).Trim();
-
-                        // Добавляем пустую строку для визуального отступа
-                        paragraph.Inlines.Add(new LineBreak());
-
-                        // Красим код
-                        AddHighlightCode(paragraph, code);
-
-                        paragraph.Inlines.Add(new LineBreak());
+                        paragraph.Inlines.Add(new Run(plainText));
                     }
-                    else // ОБЫЧНЫЙ ТЕКСТ
-                    {
-                        paragraph.Inlines.Add(new Run(parts[i]));
-                    }
+
+                    // 2. Извлекаем и красим сам код (Группа 1 — это содержимое без кавычек)
+                    string codeContent = match.Groups[1].Value.Trim();
+
+                    paragraph.Inlines.Add(new LineBreak());
+                    AddHighlightCode(paragraph, codeContent);
+                    paragraph.Inlines.Add(new LineBreak());
+
+                    lastIndex = match.Index + match.Length;
+                }
+
+                // 3. Добавляем остатки текста после последнего блока кода
+                if (lastIndex < text.Length)
+                {
+                    paragraph.Inlines.Add(new Run(text.Substring(lastIndex)));
                 }
             }
 
