@@ -183,6 +183,10 @@ namespace VibeCodingExtensionG1
 
         private async Task<string> CallLMStudioAsync(string selectedCode)
         {
+            // Получаем доступ к странице настроек
+            var options = (GeneralOptions)package.GetDialogPage(typeof(GeneralOptions));
+            string url = options.ApiUrl; // Используем значение из настроек!
+
             try
             {
                 var messages = new System.Collections.Generic.List<object>();
@@ -225,7 +229,7 @@ namespace VibeCodingExtensionG1
 
                 using (var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json"))
                 {
-                    var response = await client.PostAsync("http://127.0.0.1:1234/v1/chat/completions", content);
+                    var response = await client.PostAsync(url, content);
                     // ... далее ваш парсинг без изменений ...
 
                     if (!response.IsSuccessStatusCode)
