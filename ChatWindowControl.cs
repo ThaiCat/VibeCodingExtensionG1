@@ -542,6 +542,7 @@ namespace VibeCodingExtensionG1
 
                 // --- 1. ТАБЛИЦЫ ---
                 // Внутри ProcessMarkdownText в блоке обработки таблиц:
+                // Внутри ProcessMarkdownText в блоке обработки таблиц:
                 if (trimmed.StartsWith("|"))
                 {
                     var cells = trimmed.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
@@ -549,23 +550,17 @@ namespace VibeCodingExtensionG1
 
                     for (int i = 0; i < cells.Length; i++)
                     {
-                        // ВАЖНО: Внутри ячейки таблицы заменяем <br> на временный маркер
-                        // или обрабатываем их как спецсимволы
-                        string cellContent = cells[i].Trim();
+                        // 1. Склеиваем содержимое ячейки, превращая <br> в реальные переносы
+                        string cellContent = cells[i].Replace("<br/>", "\n").Replace("<br>", "\n").Trim();
 
-                        // Разделяем содержимое ячейки по <br>, если они там есть
-                        string[] cellSubLines = cellContent.Replace("<br/>", "<br>").Split(new[] { "<br>" }, StringSplitOptions.None);
-
-                        for (int j = 0; j < cellSubLines.Length; j++)
-                        {
-                            ParseInlineMarkdown(paragraph, cellSubLines[j].Trim());
-                            if (j < cellSubLines.Length - 1)
-                                paragraph.Inlines.Add(new LineBreak()); // Перенос внутри ячейки
-                        }
+                        // 2. Парсим всю ячейку целиком (теперь регулярка увидит и начало, и конец кода)
+                        ParseInlineMarkdown(paragraph, cellContent);
 
                         if (i < cells.Length - 1)
                             paragraph.Inlines.Add(new Run("  │  ") { Foreground = Brushes.DarkGray });
                     }
+                    // После завершения строки таблицы — перенос
+                    paragraph.Inlines.Add(new LineBreak());
                 }
                 // --- 2. ЗАГОЛОВКИ (###) ---
                 else if (trimmed.StartsWith("###"))
@@ -628,52 +623,58 @@ namespace VibeCodingExtensionG1
             InlineCollection inlines = (parent is Paragraph p) ? p.Inlines : ((Span)parent).Inlines;
             if (defaultColor == null) defaultColor = Brushes.Gainsboro;
 
-            // Регулярка теперь ищет: 
-            // 1. Блочный код внутри строки: ```csharp ... ```
-            // 2. Инлайн код: `...`
-            // 3. Жирный текст: **...**
-            var inlineRegex = new System.Text.RegularExpressions.Regex(@"((?:\s*)```(?:\w+)?.*?```)|(`.*?`)|(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.Singleline);
+            // Регулярка для захвата блоков кода и жирного текста
+            // ВАЖНО: Добавлен RegexOptions.Singleline, чтобы .* захватывал переносы строк внутри ячейки
+            var inlineRegex = new System.Text.RegularExpressions.Regex(@"(```(?:\w+)?.*?```)|(`.*?`)|(\*\*.*?\*\*)",
+                System.Text.RegularExpressions.RegexOptions.Singleline);
 
-            string[] parts = inlineRegex.Split(text);
+            var parts = inlineRegex.Split(text);
 
             foreach (var part in parts)
             {
                 if (string.IsNullOrEmpty(part)) continue;
 
-                string trimmedPart = part.Trim();
-
-                // ОБРАБОТКА КОДА (блочного или инлайнового)
-                if (trimmedPart.StartsWith("```") || (trimmedPart.StartsWith("`")))
+                if (part.StartsWith("```") || part.StartsWith("`"))
                 {
-                    // Очищаем контент от всех видов кавычек и названий языков
+                    // Чистим контент
                     string content = part;
-                    if (content.Contains("```"))
+                    if (content.StartsWith("```"))
                     {
-                        content = System.Text.RegularExpressions.Regex.Replace(content, @"```(\w+)?", "");
-                        content = content.Replace("```", "");
+                        // Убираем маркеры ``` и название языка (csharp/cpp и т.д.)
+                        content = System.Text.RegularExpressions.Regex.Replace(content, @"^```(\w+)?\s*", "");
+                        content = content.TrimEnd('`').TrimEnd();
                     }
                     else
                     {
                         content = content.Trim('`');
                     }
 
-                    inlines.Add(new Run(content.Trim())
+                    inlines.Add(new Run(content)
                     {
                         FontFamily = new FontFamily("Consolas"),
                         Foreground = Brushes.SandyBrown,
                         Background = new SolidColorBrush(Color.FromRgb(50, 50, 50))
                     });
                 }
-                else if (trimmedPart.StartsWith("**") && trimmedPart.EndsWith("**"))
+                else if (part.StartsWith("**") && part.EndsWith("**"))
                 {
-                    var content = trimmedPart.Substring(2, trimmedPart.Length - 4);
+                    var content = part.Substring(2, part.Length - 4);
                     var boldSpan = new Bold();
                     inlines.Add(boldSpan);
                     ParseInlineMarkdown(boldSpan, content, Brushes.White);
                 }
                 else
                 {
-                    inlines.Add(new Run(part) { Foreground = defaultColor });
+                    // Если внутри обычного текста остались одиночные \n от <br>, превращаем их в LineBreak
+                    string[] textLines = part.Split('\n');
+                    for (int k = 0; k < textLines.Length; k++)
+                    {
+                        if (!string.IsNullOrEmpty(textLines[k]))
+                            inlines.Add(new Run(textLines[k]) { Foreground = defaultColor });
+
+                        if (k < textLines.Length - 1)
+                            inlines.Add(new LineBreak());
+                    }
                 }
             }
         }
