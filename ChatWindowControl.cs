@@ -395,7 +395,10 @@ namespace VibeCodingExtensionG1
             paragraph.Inlines.Add(new LineBreak());
 
             // 1. Сначала ищем блоки кода (они в приоритете)
-            var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n?(.*?)\r?\n?```",
+            //var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n?(.*?)\r?\n?```",
+            //    System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n(.*?)\r?\n```",
                 System.Text.RegularExpressions.RegexOptions.Singleline);
 
             int lastIndex = 0;
