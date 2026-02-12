@@ -371,10 +371,16 @@ namespace VibeCodingExtensionG1
 
             if (isUser && !text.Contains("```"))
             {
-                // Если в тексте много "программных" символов
-                bool looksLikeCode = text.Contains("{") || text.Contains(";") || text.Split('\n').Length > 3;
+                // Считаем признаки кода: точки с запятой, фигурные скобки, лямбды, типичные операторы
+                int codeSignals = 0;
+                if (text.Contains("{") && text.Contains("}")) codeSignals += 2;
+                if (text.Contains(";")) codeSignals += 1;
+                if (text.Contains("=>")) codeSignals += 1;
+                if (text.Contains("public ") || text.Contains("private ")) codeSignals += 1;
+                if (text.Contains("var ") && text.Contains("=")) codeSignals += 1;
 
-                if (looksLikeCode)
+                // Если признаков много или текст длинный и структурный — это код
+                if (codeSignals >= 2 || (text.Length > 50 && text.Contains("\n") && codeSignals >= 1))
                 {
                     AddHighlightCode(paragraph, text.Trim());
                     responseBox.Document.Blocks.Add(paragraph);
@@ -492,7 +498,41 @@ namespace VibeCodingExtensionG1
         {
             if (string.IsNullOrEmpty(text)) return;
 
-            // Регулярка для поиска **жирного текста**
+            // Разбиваем на строки, чтобы обработать списки
+            string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+            foreach (var line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                string trimmedLine = line.TrimStart();
+
+                // Проверка на список (начинается с -, * или 1.)
+                bool isBullet = trimmedLine.StartsWith("- ") || trimmedLine.StartsWith("* ");
+                bool isNumeric = System.Text.RegularExpressions.Regex.IsMatch(trimmedLine, @"^\d+\. ");
+
+                if (isBullet || isNumeric)
+                {
+                    paragraph.Inlines.Add(new LineBreak());
+                    // Добавляем отступ для списка
+                    paragraph.Inlines.Add(new Run("  • ") { Foreground = Brushes.Gray });
+
+                    // Убираем маркер из текста строки
+                    string content = isBullet ? trimmedLine.Substring(2) : trimmedLine.Substring(trimmedLine.IndexOf('.') + 2);
+                    ParseInlineMarkdown(paragraph, content);
+                }
+                else
+                {
+                    ParseInlineMarkdown(paragraph, line);
+                }
+
+                paragraph.Inlines.Add(new LineBreak());
+            }
+        }
+
+        // Выносим обработку **жирного** в отдельный метод, чтобы применять его везде
+        private void ParseInlineMarkdown(Paragraph paragraph, string text)
+        {
             var boldRegex = new System.Text.RegularExpressions.Regex(@"(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.None);
             string[] parts = boldRegex.Split(text);
 
