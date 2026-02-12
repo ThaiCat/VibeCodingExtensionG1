@@ -19,8 +19,6 @@ namespace VibeCodingExtensionG1
         // Вместо static string contextCode...
         public static Dictionary<string, string> ContextFiles = new Dictionary<string, string>();
 
-        //public static readonly Guid CommandSet = new Guid("7A94A48F-9C2B-42E9-8179-ED0C72668AF5");
-
         private readonly AsyncPackage package;
 
         // Статичное хранилище: живет всё время, пока открыта Visual Studio
@@ -40,12 +38,8 @@ namespace VibeCodingExtensionG1
             if (commandService != null)
             {
                 Guid CommandSet = new Guid(VibeCodingExtensionG1Package.guidCmdSet);
-                // Идентификаторы команд должны совпадать с файлом magic.vsct
-                // Используем константы напрямую. Это и есть "инлайнинг" в контексте VS SDK.
-                //commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
-                //commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
-                //commandService.AddCommand(new MenuCommand(ExecuteInsert, new CommandID(CommandSet, 0x0101)));
 
+                // Идентификаторы команд должны совпадать с файлом magic.vsct
                 commandService.AddCommand(new MenuCommand(ExecuteShowChat, new CommandID(CommandSet, 0x0100)));
                 commandService.AddCommand(new MenuCommand(ExecuteAddFile, new CommandID(CommandSet, 0x0101)));
 
@@ -190,93 +184,6 @@ namespace VibeCodingExtensionG1
             }
         }
 
-
-        private async Task ProcessAskInternalAsync()
-        {
-            // МЫ НАХОДИТЕСЬ В: UI Потоке.
-            // Нужно переключиться на него явно на случай, если RunAsync начал выполнение иначе.
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-            var dte = await package.GetServiceAsync(typeof(SDTE)) as DTE2;
-            if (dte?.ActiveDocument == null) return;
-
-            // Читаем выделение (ТОЛЬКО в UI потоке!)
-            TextSelection selection = dte.ActiveDocument.Selection as TextSelection;
-            if (selection == null || string.IsNullOrEmpty(selection.Text))
-            {
-                dte.StatusBar.Text = "Сначала выделите код!";
-                return;
-            }
-
-            string codeToProcess = selection.Text;
-            dte.StatusBar.Text = "LM Studio: Отправка запроса...";
-
-            try
-            {
-                // ПЕРЕКЛЮЧЕНИЕ: Уходим в Фоновый Поток (Background Thread)
-                // Используем Task.Run, чтобы сетевое ожидание не "фризило" интерфейс Visual Studio.
-                string aiResult = await Task.Run(async () =>
-                {
-                    // ТУТ МЫ В ФОНЕ: Ждем ответа от сервера 30-120 секунд. 
-                    // VS в это время отзывчива, пользователь может работать.
-                    return await CallLMStudioAsync(codeToProcess);
-                });
-
-                // ПЕРЕКЛЮЧЕНИЕ: Возвращаемся в UI Поток
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                if (!string.IsNullOrEmpty(aiResult))
-                {
-                    lastAiResponse = aiResult; // Сохраняем "в карман"
-                                                                  
-                    // Сохраняем в настройки, чтобы увидеть "Full AI Response"
-                    var options = (OptionPageGrid)package.GetDialogPage(typeof(OptionPageGrid));
-                    options.LastResponse = aiResult;
-                    options.SaveSettingsToStorage();
-
-                    // Также выводим в окно вывода, чтобы ответ можно было увидеть "как есть"
-                    LogToOutputWindow(aiResult); 
-                    dte.StatusBar.Text = "Ответ получен! Можно вставлять.";
-                }
-                else
-                {
-                    dte.StatusBar.Text = aiResult ?? "Неизвестная ошибка";
-                }
-            }
-            catch (Exception ex)
-            {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                dte.StatusBar.Text = "Критический сбой: " + ex.Message;
-            }
-        }
-
-        // --- ЛОГИКА ВТОРОЙ КНОПКИ (INSERT) ---
-        private void ExecuteInsert(object sender, EventArgs e)
-        {
-            // МЫ В: UI Потоке. 
-            // Вставка текста в редактор — это работа с UI, фоновые потоки тут запрещены.
-            ThreadHelper.ThrowIfNotOnUIThread();
-
-            if (string.IsNullOrEmpty(lastAiResponse))
-            {
-                return;
-            }
-
-            var dte = Package.GetGlobalService(typeof(SDTE)) as DTE2;
-            if (dte?.ActiveDocument?.Selection is TextSelection selection)
-            {
-                // Открываем транзакцию отмены (чтобы Ctrl+Z работал корректно)
-                dte.UndoContext.Open("AI Code Insertion");
-                try
-                {
-                    selection.Insert(lastAiResponse);
-                }
-                finally
-                {
-                    dte.UndoContext.Close();
-                }
-            }
-        }
         private async Task<string> CallLMStudioAsync(string selectedCode)
         {
             try
