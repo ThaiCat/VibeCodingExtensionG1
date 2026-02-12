@@ -522,21 +522,14 @@ namespace VibeCodingExtensionG1
         {
             if (string.IsNullOrEmpty(text)) return;
 
-            // Заменяем HTML-тег <br> на обычный перенос строки, чтобы split его подхватил
-            string normalizedText = text.Replace("<br>", "\n").Replace("<br/>", "\n");
-
-            string[] lines = normalizedText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
             foreach (var line in lines)
             {
                 string trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed))
-                {
-                    paragraph.Inlines.Add(new LineBreak());
-                    continue;
-                }
+                if (string.IsNullOrEmpty(trimmed)) continue;
 
-                // --- Обработка таблиц | ---
+                // --- 1. ТАБЛИЦЫ ---
                 if (trimmed.StartsWith("|"))
                 {
                     var cells = trimmed.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
@@ -548,16 +541,29 @@ namespace VibeCodingExtensionG1
                             paragraph.Inlines.Add(new Run("  │  ") { Foreground = Brushes.DarkGray });
                     }
                 }
-                // --- Обработка списков (- или • или 1.) ---
-                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || trimmed.StartsWith("• ") ||
-                         System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
+                // --- 2. ЗАГОЛОВКИ (###) ---
+                else if (trimmed.StartsWith("###"))
                 {
-                    // Определяем уровень отступа (если это вложенный список из <br>)
-                    paragraph.Inlines.Add(new Run("    • ") { Foreground = Brushes.Gray });
-                    string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*•]|\d+\.)\s+", "");
+                    string content = trimmed.TrimStart('#').Trim();
+                    // Вместо того чтобы просто добавить Run, мы создаем временный Span
+                    // чтобы ParseInlineMarkdown мог покрасить инлайны внутри заголовка
+                    var headerSpan = new Span { FontSize = responseBox.FontSize + 2, FontWeight = FontWeights.Bold };
+                    paragraph.Inlines.Add(headerSpan);
+
+                    // Важно: передаем не параграф, а Span заголовка!
+                    ParseInlineMarkdown(headerSpan, content, Brushes.SkyBlue);
+                }
+                // --- 3. СПИСКИ (- или * или 1.) ---
+                // Внутри ProcessMarkdownText для списков:
+                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
+                {
+                    paragraph.Inlines.Add(new Run("  • ") { Foreground = Brushes.Gray });
+                    string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*]|\d+\.)\s+", "");
+
+                    // Вызываем нашу новую рекурсивную функцию
                     ParseInlineMarkdown(paragraph, content);
                 }
-                // ... (остальные условия для заголовков ### и обычного текста) ...
+                // --- 4. ОБЫЧНЫЙ ТЕКСТ ---
                 else
                 {
                     ParseInlineMarkdown(paragraph, line);
