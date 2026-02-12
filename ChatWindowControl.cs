@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -371,50 +372,63 @@ namespace VibeCodingExtensionG1
             { Foreground = isUser ? Brushes.SkyBlue : Brushes.LightGreen });
             paragraph.Inlines.Add(new LineBreak());
 
-            // 1. Авто-детект для пользователя (без изменений)
-            if (isUser && !text.Contains("```") && LooksLikeCode(text))
+            // Разделяем на строки для потокового анализа
+            string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+
+            bool isInCodeBlock = false;
+            List<string> currentCodeLines = new List<string>();
+            StringBuilder currentTextBlock = new StringBuilder();
+
+            foreach (var line in lines)
             {
-                AddHighlightCode(paragraph, text.Trim());
-                responseBox.Document.Blocks.Add(paragraph);
-                responseBox.ScrollToEnd();
-                return;
+                // Проверяем, является ли строка маркером начала или конца блока кода
+                // Маркером считаем только строку, которая НАЧИНАЕТСЯ с ```
+                bool isCodeMarker = line.TrimStart().StartsWith("```");
+
+                if (isCodeMarker)
+                {
+                    if (!isInCodeBlock)
+                    {
+                        // Входим в блок кода: сбрасываем накопленный текст
+                        if (currentTextBlock.Length > 0)
+                        {
+                            ProcessMarkdownText(paragraph, currentTextBlock.ToString());
+                            currentTextBlock.Clear();
+                        }
+                        isInCodeBlock = true;
+                    }
+                    else
+                    {
+                        // Выходим из блока кода: отрисовываем накопленный код
+                        paragraph.Inlines.Add(new LineBreak());
+                        AddHighlightCode(paragraph, string.Join("\n", currentCodeLines));
+                        paragraph.Inlines.Add(new LineBreak());
+
+                        currentCodeLines.Clear();
+                        isInCodeBlock = false;
+                    }
+                    continue;
+                }
+
+                if (isInCodeBlock)
+                {
+                    currentCodeLines.Add(line);
+                }
+                else
+                {
+                    currentTextBlock.AppendLine(line);
+                }
             }
 
-            // 2. Улучшенная регулярка (ищет блоки с учетом переносов строк)
-            var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n(.*?)\r?\n```",
-                System.Text.RegularExpressions.RegexOptions.Singleline);
-
-            int lastIndex = 0;
-            var matches = codeRegex.Matches(text);
-
-            if (matches.Count == 0 && text.Contains("```"))
+            // Дорисовываем остатки
+            if (isInCodeBlock && currentCodeLines.Count > 0)
             {
-                // Если кавычки есть, но регулярка не нашла ПАРНЫХ блоков (битая разметка),
-                // попробуем упрощенный поиск, чтобы хоть что-то подсветить
-                codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n(.*)",
-                    System.Text.RegularExpressions.RegexOptions.Singleline);
-                matches = codeRegex.Matches(text);
+                AddHighlightCode(paragraph, string.Join("\n", currentCodeLines));
             }
-
-            foreach (System.Text.RegularExpressions.Match match in matches)
+            else if (currentTextBlock.Length > 0)
             {
-                // Текст до кода
-                string plainText = text.Substring(lastIndex, match.Index - lastIndex);
-                if (!string.IsNullOrWhiteSpace(plainText))
-                    ProcessMarkdownText(paragraph, plainText);
-
-                // Код (извлекаем группу 1)
-                string codeContent = match.Groups[1].Value;
-                paragraph.Inlines.Add(new LineBreak());
-                AddHighlightCode(paragraph, codeContent.Trim('\r', '\n'));
-                paragraph.Inlines.Add(new LineBreak());
-
-                lastIndex = match.Index + match.Length;
+                ProcessMarkdownText(paragraph, currentTextBlock.ToString());
             }
-
-            // Остаток текста
-            if (lastIndex < text.Length)
-                ProcessMarkdownText(paragraph, text.Substring(lastIndex));
 
             responseBox.Document.Blocks.Add(paragraph);
             responseBox.ScrollToEnd();
@@ -492,61 +506,117 @@ namespace VibeCodingExtensionG1
                 paragraph.Inlines.Add(run);
             }
         }
+
         private void ProcessMarkdownText(Paragraph paragraph, string text)
         {
             if (string.IsNullOrEmpty(text)) return;
 
-            // Разбиваем на строки, чтобы обработать списки
             string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
             foreach (var line in lines)
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
+                string trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed)) continue;
 
-                string trimmedLine = line.TrimStart();
-
-                // Проверка на список (начинается с -, * или 1.)
-                bool isBullet = trimmedLine.StartsWith("- ") || trimmedLine.StartsWith("* ");
-                bool isNumeric = System.Text.RegularExpressions.Regex.IsMatch(trimmedLine, @"^\d+\. ");
-
-                if (isBullet || isNumeric)
+                // Если это строка таблицы | 1 | текст |
+                if (trimmed.StartsWith("|"))
                 {
-                    paragraph.Inlines.Add(new LineBreak());
-                    // Добавляем отступ для списка
-                    paragraph.Inlines.Add(new Run("  • ") { Foreground = Brushes.Gray });
+                    var cells = trimmed.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+                    paragraph.Inlines.Add(new Run("  ")); // Отступ слева
 
-                    // Убираем маркер из текста строки
-                    string content = isBullet ? trimmedLine.Substring(2) : trimmedLine.Substring(trimmedLine.IndexOf('.') + 2);
+                    for (int i = 0; i < cells.Length; i++)
+                    {
+                        // Прогоняем содержимое ячейки через парсер инлайнов (жирный + код)
+                        ParseInlineMarkdown(paragraph, cells[i].Trim());
+
+                        if (i < cells.Length - 1)
+                            paragraph.Inlines.Add(new Run("  │  ") { Foreground = Brushes.DarkGray });
+                    }
+                    paragraph.Inlines.Add(new LineBreak());
+                }
+                // Если это список - или * или 1.
+                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
+                {
+                    paragraph.Inlines.Add(new Run("  • ") { Foreground = Brushes.Gray });
+                    string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*]|\d+\.)\s+", "");
                     ParseInlineMarkdown(paragraph, content);
+                    paragraph.Inlines.Add(new LineBreak());
+                }
+                // Заголовки ###
+                else if (trimmed.StartsWith("###"))
+                {
+                    string content = trimmed.TrimStart('#').Trim();
+                    var run = new Run(content) { Foreground = Brushes.SkyBlue, FontSize = responseBox.FontSize + 2 };
+                    paragraph.Inlines.Add(new Bold(run));
+                    paragraph.Inlines.Add(new LineBreak());
                 }
                 else
                 {
                     ParseInlineMarkdown(paragraph, line);
+                    paragraph.Inlines.Add(new LineBreak());
                 }
+            }
+        }
 
-                paragraph.Inlines.Add(new LineBreak());
+        private void FormatInlineCode(Paragraph paragraph, string text)
+        {
+            var parts = text.Split('`');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i % 2 == 1) // Текст внутри кавычек
+                {
+                    paragraph.Inlines.Add(new Run(parts[i])
+                    {
+                        FontFamily = new FontFamily("Consolas"),
+                        Foreground = Brushes.SandyBrown,
+                        Background = new SolidColorBrush(Color.FromRgb(50, 50, 50))
+                    });
+                }
+                else
+                {
+                    paragraph.Inlines.Add(new Run(parts[i]));
+                }
             }
         }
 
         // Выносим обработку **жирного** в отдельный метод, чтобы применять его везде
         private void ParseInlineMarkdown(Paragraph paragraph, string text)
         {
-            var boldRegex = new System.Text.RegularExpressions.Regex(@"(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.None);
-            string[] parts = boldRegex.Split(text);
+            if (string.IsNullOrEmpty(text)) return;
+
+            // Регулярка ищет ИЛИ блоки кода в апострофах, ИЛИ жирный текст
+            // Группа 1: `код`, Группа 2: **жирный**
+            var inlineRegex = new System.Text.RegularExpressions.Regex(@"(`.*?`)|(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.None);
+
+            string[] parts = inlineRegex.Split(text);
 
             foreach (var part in parts)
             {
-                if (part.StartsWith("**") && part.EndsWith("**"))
+                if (string.IsNullOrEmpty(part)) continue;
+
+                if (part.StartsWith("`") && part.EndsWith("`")) // ИНЛАЙН КОД
+                {
+                    var content = part.Substring(1, part.Length - 2);
+                    paragraph.Inlines.Add(new Run(content)
+                    {
+                        FontFamily = new FontFamily("Consolas"),
+                        Foreground = Brushes.SandyBrown,
+                        Background = new SolidColorBrush(Color.FromRgb(50, 50, 50))
+                    });
+                }
+                else if (part.StartsWith("**") && part.EndsWith("**")) // ЖИРНЫЙ
                 {
                     var content = part.Substring(2, part.Length - 4);
                     paragraph.Inlines.Add(new Bold(new Run(content)) { Foreground = Brushes.White });
                 }
-                else
+                else // ОБЫЧНЫЙ ТЕКСТ
                 {
                     paragraph.Inlines.Add(new Run(part));
                 }
             }
         }
+
+
         private bool LooksLikeCode(string text)
         {
             int signals = 0;
