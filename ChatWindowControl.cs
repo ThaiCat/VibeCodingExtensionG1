@@ -522,12 +522,18 @@ namespace VibeCodingExtensionG1
         {
             if (string.IsNullOrEmpty(text)) return;
 
+            // Заменяем HTML-тег <br> на обычный перенос строки, чтобы split его подхватил
+            string normalizedText = text.Replace("<br>", "\n").Replace("<br/>", "\n");
             string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
             foreach (var line in lines)
             {
                 string trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed)) continue;
+                if (string.IsNullOrEmpty(trimmed))
+                {
+                    paragraph.Inlines.Add(new LineBreak());
+                    continue;
+                }
 
                 // --- 1. ТАБЛИЦЫ ---
                 if (trimmed.StartsWith("|"))
@@ -555,12 +561,12 @@ namespace VibeCodingExtensionG1
                 }
                 // --- 3. СПИСКИ (- или * или 1.) ---
                 // Внутри ProcessMarkdownText для списков:
-                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
+                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || trimmed.StartsWith("• ") || 
+                    System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
                 {
-                    paragraph.Inlines.Add(new Run("  • ") { Foreground = Brushes.Gray });
-                    string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*]|\d+\.)\s+", "");
-
-                    // Вызываем нашу новую рекурсивную функцию
+                    // Определяем уровень отступа (если это вложенный список из <br>)
+                    paragraph.Inlines.Add(new Run("    • ") { Foreground = Brushes.Gray });
+                    string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*•]|\d+\.)\s+", "");
                     ParseInlineMarkdown(paragraph, content);
                 }
                 // --- 4. ОБЫЧНЫЙ ТЕКСТ ---
