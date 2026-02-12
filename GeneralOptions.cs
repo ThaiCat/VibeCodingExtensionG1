@@ -5,39 +5,43 @@ namespace VibeCodingExtensionG1
 {
     public class GeneralOptions : DialogPage
     {
-        // --- Секция подключения ---
-        [Category("Connection")]
-        [DisplayName("LM Studio API URL")]
-        [Description("Endpoint для API (например, http://localhost:1234/v1/chat/completions)")]
+        // --- Подключение ---
+        [Category("1. Connection")]
+        [DisplayName("API URL")]
+        [Description("Endpoint для API LM Studio")]
         public string ApiUrl { get; set; } = "http://localhost:1234/v1/chat/completions";
 
-        [Category("Connection")]
+        [Category("1. Connection")]
         [DisplayName("Model Name")]
-        [Description("Идентификатор модели в LM Studio (обычно 'local-model')")]
         public string ModelName { get; set; } = "local-model";
 
-        // --- Секция параметров генерации ---
-        [Category("AI Parameters")]
+        // --- Параметры нейросети ---
+        [Category("2. AI Parameters")]
         [DisplayName("Temperature")]
-        [Description("Степень случайности (0.0 — точный ответ, 1.0 — творческий). Рекомендуется 0.7")]
+        [Description("0.0 - точный ответ, 1.0 - творческий. Рекомендуется 0.7")]
         public double Temperature { get; set; } = 0.1;
 
-        [Category("AI Parameters")]
+        [Category("2. AI Parameters")]
         [DisplayName("Max Tokens")]
-        [Description("Максимальное количество генерируемых токенов (-1 для бесконечности)")]
+        [Description("Лимит длины ответа (-1 — без ограничений)")]
         public int MaxTokens { get; set; } = -1;
 
-        // --- Секция промптов ---
-        [Category("AI Prompts")]
+        [Category("2. AI Parameters")]
+        [DisplayName("System Prompt")]
+        [Description("Инструкция, определяющая роль ИИ")]
+        public string SystemPrompt { get; set; } = "Ты опытный C# разработчик. Отвечай кратко, профессионально и приводи примеры кода в блоках ```csharp";
+
+        // --- Шаблоны команд ---
+        [Category("3. AI Prompts")]
         [DisplayName("Explain Prompt")]
-        public string ExplainPrompt { get; set; } = "Объясни, как работает этот код:";
+        public string ExplainPrompt { get; set; } = "Объясни следующий фрагмент кода, опираясь на контекст файлов выше:";
 
-        [Category("AI Prompts")]
+        [Category("3. AI Prompts")]
         [DisplayName("Fix Bugs Prompt")]
-        public string FixBugsPrompt { get; set; } = "Найди ошибки и предложи исправления в этом коде:";
+        public string FixBugsPrompt { get; set; } = "Найди ошибки в этом фрагменте кода и исправь их. Учти связи с другими файлами из контекста:";
 
-        [Category("AI Prompts")]
+        [Category("3. AI Prompts")]
         [DisplayName("Optimize Prompt")]
-        public string OptimizePrompt { get; set; } = "Оптимизируй этот код для лучшей читаемости и производительности:";
+        public string OptimizePrompt { get; set; } = "Оптимизируй этот фрагмент кода:";
     }
 }

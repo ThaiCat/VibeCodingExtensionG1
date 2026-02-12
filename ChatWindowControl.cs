@@ -331,7 +331,7 @@ namespace VibeCodingExtensionG1
         public void SendExternalQuery(string codeContext)
         {
             // Очищаем поле ввода и вставляем туда запрос (или добавляем к существующему)
-            inputBox.Text = $"Объясни этот код или предложи улучшения:\n\n```\n{codeContext}\n```";
+            inputBox.Text = $"{codeContext}";
 
             // Вызываем уже существующую логику отправки
             SendToAi();
@@ -350,12 +350,9 @@ namespace VibeCodingExtensionG1
                 return;
             }
 
-
-            //string text = inputBox.Text;
             if (string.IsNullOrWhiteSpace(text)) return;
 
             AppendFormattedText($"{text}\n", true);
-            //responseBox.AppendText($"\nUser: {text}\n");
             inputBox.Clear();
 
             // Вызов вашей логики
@@ -363,7 +360,6 @@ namespace VibeCodingExtensionG1
             {
                 string reply = await LMCommand.Instance.CallAiFromChatAsync(text);
                 await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                //responseBox.AppendText($"\nAI: {reply}\n");
                 AppendFormattedText($"{reply}\n", false);
                 responseBox.ScrollToEnd();
             });

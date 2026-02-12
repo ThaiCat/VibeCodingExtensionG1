@@ -191,30 +191,46 @@ namespace VibeCodingExtensionG1
             {
                 var messages = new System.Collections.Generic.List<object>();
 
-                // Если мы ранее "запомнили" файл, добавляем его первым
+                // Добавляем системную роль из настроек
+                messages.Add(new { role = "system", content = options.SystemPrompt });
+
+
+                // 2. Справочный контекст (если есть файлы)
                 if (ContextFiles.Count > 0)
                 {
-                    StringBuilder fullContext = new StringBuilder("Используй следующий контекст из нескольких файлов:\n\n");
+                    StringBuilder sb = new StringBuilder("Используй эти файлы ТОЛЬКО как справочную информацию:\n\n");
                     foreach (var file in ContextFiles)
                     {
-                        fullContext.AppendLine($"--- FILE: {file.Key} ---");
-                        fullContext.AppendLine(file.Value);
-                        fullContext.AppendLine("-------------------\n");
+                        sb.AppendLine($"Файл: {file.Key}\n{file.Value}\n---");
                     }
-
-                    messages.Add(new
-                    {
-                        role = "system",
-                        content = fullContext.ToString()
-                    });
+                    messages.Add(new { role = "system", content = sb.ToString() });
                 }
 
-                // Добавляем само выделение и вопрос
-                messages.Add(new
-                {
-                    role = "user",
-                    content = $"Ниже приведен фрагмент кода. Проанализируй его, учитывая контекст выше (если есть):\n\n{selectedCode}"
-                });
+                // Если мы ранее "запомнили" файл, добавляем его первым
+                //if (ContextFiles.Count > 0)
+                //{
+                //    StringBuilder fullContext = new StringBuilder("Используй следующий контекст из нескольких файлов:\n\n");
+                //    foreach (var file in ContextFiles)
+                //    {
+                //        fullContext.AppendLine($"--- FILE: {file.Key} ---");
+                //        fullContext.AppendLine(file.Value);
+                //        fullContext.AppendLine("-------------------\n");
+                //    }
+
+                //    messages.Add(new
+                //    {
+                //        role = "system",
+                //        content = fullContext.ToString()
+                //    });
+                //}
+
+                //Добавляем само выделение и вопрос
+                messages.Add(new { role = "user", content = selectedCode });
+                //messages.Add(new
+                //{
+                //    role = "user",
+                //    content = $"Ниже приведен фрагмент кода. Проанализируй его, учитывая контекст выше (если есть):\n\n{selectedCode}"
+                //});
 
                 var payload = new
                 {
