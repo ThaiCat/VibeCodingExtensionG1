@@ -124,7 +124,7 @@ namespace VibeCodingExtensionG1
 
             btnClear = new Button
             {
-                Content = "Clear Context",
+                Content = "🗑️ Clear Context",
                 Padding = new Thickness(5, 3, 5, 3),
                 //Margin = new Thickness(0, 5, 5, 0),
                 MinWidth = 80,
@@ -146,7 +146,7 @@ namespace VibeCodingExtensionG1
 
             var btnSend = new Button 
             { 
-                Content = "Send to AI", 
+                Content = "🚀 Send to AI",
                 Padding = new Thickness(5, 3, 5, 3), 
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
@@ -174,7 +174,7 @@ namespace VibeCodingExtensionG1
 
                     // Визуальный фидбек
                     var originalContent = btnCopy.Content;
-                    btnCopy.Content = "Done!";
+                    btnCopy.Content = "✔️ Done!";
                     btnCopy.Background = Brushes.DarkGreen;
 
                     var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -412,8 +412,31 @@ namespace VibeCodingExtensionG1
             lastGeneratedCode = code;
 
             var keywords = new HashSet<string> {
-                "public", "private", "protected", "static", "class", "struct", "void",
-                "string", "int", "bool", "var", "async", "await", "return", "new", "using", "if", "else", "foreach", "for"
+                // Доступ и модификаторы
+                "public", "private", "protected", "internal", "static", "readonly", "sealed",
+                "abstract", "virtual", "override", "partial", "volatile", "const", "extern",
+                
+                // Типы и структуры
+                "class", "struct", "interface", "enum", "delegate", "record", "event", "namespace",
+                
+                // Базовые типы
+                "void", "string", "int", "bool", "double", "float", "decimal", "long", "short",
+                "char", "byte", "object", "dynamic", "var", "null", "true", "false",
+                
+                // Управление потоком
+                "if", "else", "switch", "case", "default", "while", "do", "for", "foreach",
+                "break", "continue", "return", "yield", "goto",
+                
+                // Исключения
+                "try", "catch", "finally", "throw", "when",
+                
+                // Асинхронность и LINQ
+                "async", "await", "task", "from", "where", "select", "group", "into",
+                "orderby", "join", "let", "in", "on", "ascending", "descending",
+                
+                // Операторы и прочее
+                "new", "using", "is", "as", "out", "ref", "params", "this", "base",
+                "lock", "typeof", "sizeof", "checked", "unchecked", "get", "set", "init", "value"
             };
 
             // Регулярка для деления на: комментарии (//...), строки ("..."), слова (\w+) или прочее (\W)
@@ -465,14 +488,14 @@ namespace VibeCodingExtensionG1
         {
             pressDuration = 0;
             longPressTimer.Start();
-            btnClear.Content = "Hold... [0%]";
+            btnClear.Content = "⏳ Hold... [0%]";
         }
 
         private void StopLongPress()
         {
             longPressTimer.Stop();
             pressDuration = 0;
-            btnClear.Content = "Clear Context";
+            btnClear.Content = "🗑️ Clear Context";
             //btnClear.Opacity = 0.7;
         }
 
@@ -483,7 +506,7 @@ namespace VibeCodingExtensionG1
 
             if (progress <= 100)
             {
-                btnClear.Content = $"Hold... [{progress}%]";
+                btnClear.Content = $"⏳ Hold... [{progress}%]";
                 //btnClear.Opacity = 0.7 + (progress / 333.0); // Постепенно становится ярче
             }
 
@@ -492,7 +515,7 @@ namespace VibeCodingExtensionG1
                 StopLongPress();
                 ClearAllContext();
                 // Визуальный эффект успешной очистки
-                btnClear.Content = "CLEARED!";
+                btnClear.Content = "✅ CLEARED!";
             }
         }
 

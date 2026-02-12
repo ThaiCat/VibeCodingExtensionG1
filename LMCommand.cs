@@ -186,6 +186,7 @@ namespace VibeCodingExtensionG1
             // Получаем доступ к странице настроек
             var options = (GeneralOptions)package.GetDialogPage(typeof(GeneralOptions));
             string url = options.ApiUrl; // Используем значение из настроек!
+            var sw = System.Diagnostics.Stopwatch.StartNew();
 
             try
             {
@@ -225,6 +226,8 @@ namespace VibeCodingExtensionG1
                     var response = await client.PostAsync(url, content);
                     // ... далее ваш парсинг без изменений ...
 
+                    sw.Stop();
+
                     if (!response.IsSuccessStatusCode)
                         return "Ошибка сети: " + response.StatusCode;
 
@@ -233,43 +236,57 @@ namespace VibeCodingExtensionG1
                     LogToOutputWindow("RAW JSON: " + jsonResponse);
 
                     // Парсим результат через System.Text.Json (надежно для больших текстов)
-                    return ParseJsonContent(jsonResponse);
+                    return ParseJsonContent(jsonResponse, sw.Elapsed.TotalSeconds);
                 }
             }
             catch (Exception ex) { return "Ошибка: " + ex.Message; }
         }
 
-        private string ParseJsonContent(string json)
+        private string ParseJsonContent(string json, double elapsedSeconds)
         {
             try
             {
-                var serializer = new JavaScriptSerializer();
-                // Ограничиваем длину текста, чтобы сериализатор не захлебнулся
-                serializer.MaxJsonLength = int.MaxValue;
-
+                var serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
                 var root = serializer.Deserialize<Dictionary<string, object>>(json);
 
-                if (root != null && root.ContainsKey("choices"))
+                if (root == null) return "Ошибка: пустой ответ.";
+
+                string content = "";
+                int totalTokens = 0;
+
+                // Извлекаем контент
+                if (root.ContainsKey("choices"))
                 {
                     var choices = root["choices"] as IEnumerable;
                     foreach (var choice in choices)
                     {
                         var choiceDict = choice as Dictionary<string, object>;
-                        if (choiceDict != null && choiceDict.ContainsKey("message"))
-                        {
-                            var messageDict = choiceDict["message"] as Dictionary<string, object>;
-                            if (messageDict != null && messageDict.ContainsKey("content"))
-                            {
-                                string content = messageDict["content"]?.ToString();
-                                if (!string.IsNullOrEmpty(content))
-                                {
-                                    return content;
-                                }
-                            }
-                        }
+                        var messageDict = choiceDict?["message"] as Dictionary<string, object>;
+                        content = messageDict?["content"]?.ToString();
                     }
                 }
-                return "Ошибка: Структура JSON распознана, но поле 'content' пустое.";
+
+                // Извлекаем статистику (usage)
+                if (root.ContainsKey("usage"))
+                {
+                    var usage = root["usage"] as Dictionary<string, object>;
+                    if (usage != null && usage.ContainsKey("completion_tokens"))
+                    {
+                        totalTokens = (int)usage["completion_tokens"];
+                    }
+                }
+
+                if (string.IsNullOrEmpty(content)) return "Ошибка: поле 'content' пустое.";
+
+                // Добавляем статистику в конец
+                if (totalTokens > 0 && elapsedSeconds > 0)
+                {
+                    double speed = totalTokens / elapsedSeconds;
+                    content += $"\n\n---";
+                    content += $"\n[Статистика: {totalTokens} токенов | {speed:F2} токенов/сек | {elapsedSeconds:F2} сек]";
+                }
+
+                return content;
             }
             catch (Exception ex)
             {
