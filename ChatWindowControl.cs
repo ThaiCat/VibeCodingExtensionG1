@@ -554,10 +554,13 @@ namespace VibeCodingExtensionG1
                     ParseInlineMarkdown(headerSpan, content, Brushes.SkyBlue);
                 }
                 // --- 3. СПИСКИ (- или * или 1.) ---
+                // Внутри ProcessMarkdownText для списков:
                 else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
                 {
                     paragraph.Inlines.Add(new Run("  • ") { Foreground = Brushes.Gray });
                     string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*]|\d+\.)\s+", "");
+
+                    // Вызываем нашу новую рекурсивную функцию
                     ParseInlineMarkdown(paragraph, content);
                 }
                 // --- 4. ОБЫЧНЫЙ ТЕКСТ ---
@@ -596,20 +599,18 @@ namespace VibeCodingExtensionG1
         private void ParseInlineMarkdown(TextElement parent, string text, Brush defaultColor = null)
         {
             if (string.IsNullOrEmpty(text)) return;
-
-            // Получаем коллекцию Inlines в зависимости от типа родителя (Paragraph или Span)
             InlineCollection inlines = (parent is Paragraph p) ? p.Inlines : ((Span)parent).Inlines;
-
             if (defaultColor == null) defaultColor = Brushes.Gainsboro;
 
+            // Регулярка для поиска ИЛИ кода в кавычках, ИЛИ жирного текста
             var inlineRegex = new System.Text.RegularExpressions.Regex(@"(`.*?`)|(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.None);
-            string[] parts = inlineRegex.Split(text);
+            var parts = inlineRegex.Split(text);
 
             foreach (var part in parts)
             {
                 if (string.IsNullOrEmpty(part)) continue;
 
-                if (part.StartsWith("`") && part.EndsWith("`")) // ИНЛАЙН КОД
+                if (part.StartsWith("`") && part.EndsWith("`")) // --- ЭТО КОД ---
                 {
                     var content = part.Substring(1, part.Length - 2);
                     inlines.Add(new Run(content)
@@ -619,12 +620,16 @@ namespace VibeCodingExtensionG1
                         Background = new SolidColorBrush(Color.FromRgb(50, 50, 50))
                     });
                 }
-                else if (part.StartsWith("**") && part.EndsWith("**")) // ЖИРНЫЙ
+                else if (part.StartsWith("**") && part.EndsWith("**")) // --- ЭТО ЖИРНЫЙ ---
                 {
                     var content = part.Substring(2, part.Length - 4);
-                    inlines.Add(new Bold(new Run(content)) { Foreground = Brushes.White });
+                    var boldSpan = new Bold();
+                    inlines.Add(boldSpan);
+
+                    // РЕКУРСИЯ: Проверяем, нет ли внутри жирного текста еще и `кода`
+                    ParseInlineMarkdown(boldSpan, content, Brushes.White);
                 }
-                else // ОБЫЧНЫЙ ТЕКСТ
+                else // --- ЭТО ОБЫЧНЫЙ ТЕКСТ ---
                 {
                     inlines.Add(new Run(part) { Foreground = defaultColor });
                 }
