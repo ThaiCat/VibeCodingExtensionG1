@@ -29,6 +29,7 @@ namespace VibeCodingExtensionG1
     [Guid(VibeCodingExtensionG1Package.PackageGuidString)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideOptionPage(typeof(OptionPageGrid), "Vibe AI", "General", 0, 0, true)]
+    [ProvideOptionPage(typeof(GeneralOptions), "Vibe Coding", "AI Settings", 0, 0, true)]
     public sealed class VibeCodingExtensionG1Package : AsyncPackage
     {
         /// <summary>

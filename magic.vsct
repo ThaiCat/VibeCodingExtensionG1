@@ -12,28 +12,38 @@
 		</Groups>
 
 		<Buttons>
-			<Button guid="guidCmdSet" id="LMCommandId" priority="0x0100" type="Button">
+			<Button guid="guidCmdSet" id="ShowChatCommandId" priority="0x0100" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>VibeCE Ask AI</ButtonText>
+					<ButtonText>Open AI Chat</ButtonText>
 				</Strings>
 			</Button>
-			<Button guid="guidCmdSet" id="InsertCommandId" priority="0x0101" type="Button">
+
+			<Button guid="guidCmdSet" id="AddContextCommandId" priority="0x0101" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>VibeCE Paste AI Responce</ButtonText>
+					<ButtonText>Add File to Context</ButtonText>
 				</Strings>
 			</Button>
-			<Button guid="guidCmdSet" id="AddContextCommandId" priority="0x0102" type="Button">
+
+			<Button guid="guidCmdSet" id="ExplainCommandId" priority="0x0102" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>VibeCE Add Current File to Context</ButtonText>
+					<ButtonText>AI: Explain Code</ButtonText>
 				</Strings>
 			</Button>
-			<Button guid="guidCmdSet" id="ShowChatCommandId" priority="0x0103" type="Button">
+
+			<Button guid="guidCmdSet" id="FixBugsCommandId" priority="0x0103" type="Button">
 				<Parent guid="guidCmdSet" id="MyMenuGroup" />
 				<Strings>
-					<ButtonText>VibeCE AI Chat Window</ButtonText>
+					<ButtonText>AI: Fix Bugs</ButtonText>
+				</Strings>
+			</Button>
+
+			<Button guid="guidCmdSet" id="OptimizeCommandId" priority="0x0104" type="Button">
+				<Parent guid="guidCmdSet" id="MyMenuGroup" />
+				<Strings>
+					<ButtonText>AI: Optimize Code</ButtonText>
 				</Strings>
 			</Button>
 		</Buttons>
@@ -43,10 +53,11 @@
 		<GuidSymbol name="guidPackage" value="{aae692f9-ba51-46d0-bc60-c5a31fbb4c5d}" />
 		<GuidSymbol name="guidCmdSet" value="{7A94A48F-9C2B-42E9-8179-ED0C72668AF5}">
 			<IDSymbol name="MyMenuGroup" value="0x1020" />
-			<IDSymbol name="LMCommandId" value="0x0100" />
-			<IDSymbol name="InsertCommandId" value="0x0101" />
-			<IDSymbol name="AddContextCommandId" value="0x0102" />
-			<IDSymbol name="ShowChatCommandId" value="0x0103" />
+			<IDSymbol name="ShowChatCommandId" value="0x0100" />
+			<IDSymbol name="AddContextCommandId" value="0x0101" />
+			<IDSymbol name="ExplainCommandId" value="0x0102" />
+			<IDSymbol name="FixBugsCommandId" value="0x0103" />
+			<IDSymbol name="OptimizeCommandId" value="0x0104" />
 		</GuidSymbol>
 	</Symbols>
 
