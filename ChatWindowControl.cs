@@ -450,33 +450,37 @@ namespace VibeCodingExtensionG1
             };
 
             // Регулярка для деления на: комментарии (//...), строки ("..."), слова (\w+) или прочее (\W)
-            var tokens = System.Text.RegularExpressions.Regex.Matches(code, @"(//.*?$)|("".*?"")|(\w+)|(\W)",
+            //var tokens = System.Text.RegularExpressions.Regex.Matches(code, @"(//.*?$)|("".*?"")|(\w+)|(\W)",
+            //    System.Text.RegularExpressions.RegexOptions.Multiline);
+
+            // ОБНОВЛЕННАЯ РЕГУЛЯРКА: 
+            // Добавляем (@"".*?"") для поддержки verbatim-строк C# и (```) как отдельный токен
+            var tokens = System.Text.RegularExpressions.Regex.Matches(code,
+                @"(@"".*?"")|(""[^""]*?"")|(//.*?$)|(```)|(\w+)|(\W)",
                 System.Text.RegularExpressions.RegexOptions.Multiline);
 
             foreach (System.Text.RegularExpressions.Match match in tokens)
             {
                 string token = match.Value;
                 var run = new Run(token) { FontFamily = new FontFamily("Consolas") };
+                run.Background = new SolidColorBrush(Color.FromRgb(40, 40, 40));
 
-                if (token.StartsWith("//")) // КОММЕНТАРИИ
+                if (token.StartsWith("//"))
                 {
-                    run.Foreground = new SolidColorBrush(Color.FromRgb(87, 166, 74)); // Зеленый VS
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(87, 166, 74));
                 }
-                else if (token.StartsWith("\"") && token.EndsWith("\"")) // СТРОКИ
+                // Обработка обычных и @-строк (теперь они не будут рваться на ```)
+                else if (token.StartsWith("\"") || token.StartsWith("@\""))
                 {
-                    run.Foreground = new SolidColorBrush(Color.FromRgb(214, 157, 133)); // Рыжий VS
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(214, 157, 133));
                 }
-                else if (keywords.Contains(token)) // КЛЮЧЕВЫЕ СЛОВА
+                else if (token == "```") // Если кавычки встретились ВНЕ строки
                 {
-                    run.Foreground = new SolidColorBrush(Color.FromRgb(86, 156, 214)); // Синий VS
+                    run.Foreground = Brushes.Tomato; // Выделим их как спецсимвол
                 }
-                else if (System.Text.RegularExpressions.Regex.IsMatch(token, @"^\d+$")) // ЧИСЛА
+                else if (keywords.Contains(token))
                 {
-                    run.Foreground = new SolidColorBrush(Color.FromRgb(181, 206, 168));
-                }
-                else
-                {
-                    run.Foreground = Brushes.Gainsboro;
+                    run.Foreground = new SolidColorBrush(Color.FromRgb(86, 156, 214));
                 }
 
                 // Подсвечиваем фон блока кода легким серым цветом, чтобы отделить от текста
