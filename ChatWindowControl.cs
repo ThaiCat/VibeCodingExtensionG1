@@ -628,34 +628,50 @@ namespace VibeCodingExtensionG1
             InlineCollection inlines = (parent is Paragraph p) ? p.Inlines : ((Span)parent).Inlines;
             if (defaultColor == null) defaultColor = Brushes.Gainsboro;
 
-            // Регулярка для поиска ИЛИ кода в кавычках, ИЛИ жирного текста
-            var inlineRegex = new System.Text.RegularExpressions.Regex(@"(`.*?`)|(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.None);
-            var parts = inlineRegex.Split(text);
+            // Регулярка теперь ищет: 
+            // 1. Блочный код внутри строки: ```csharp ... ```
+            // 2. Инлайн код: `...`
+            // 3. Жирный текст: **...**
+            var inlineRegex = new System.Text.RegularExpressions.Regex(@"((?:\s*)```(?:\w+)?.*?```)|(`.*?`)|(\*\*.*?\*\*)", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+            string[] parts = inlineRegex.Split(text);
 
             foreach (var part in parts)
             {
                 if (string.IsNullOrEmpty(part)) continue;
 
-                if (part.StartsWith("`") && part.EndsWith("`")) // --- ЭТО КОД ---
+                string trimmedPart = part.Trim();
+
+                // ОБРАБОТКА КОДА (блочного или инлайнового)
+                if (trimmedPart.StartsWith("```") || (trimmedPart.StartsWith("`")))
                 {
-                    var content = part.Substring(1, part.Length - 2);
-                    inlines.Add(new Run(content)
+                    // Очищаем контент от всех видов кавычек и названий языков
+                    string content = part;
+                    if (content.Contains("```"))
+                    {
+                        content = System.Text.RegularExpressions.Regex.Replace(content, @"```(\w+)?", "");
+                        content = content.Replace("```", "");
+                    }
+                    else
+                    {
+                        content = content.Trim('`');
+                    }
+
+                    inlines.Add(new Run(content.Trim())
                     {
                         FontFamily = new FontFamily("Consolas"),
                         Foreground = Brushes.SandyBrown,
                         Background = new SolidColorBrush(Color.FromRgb(50, 50, 50))
                     });
                 }
-                else if (part.StartsWith("**") && part.EndsWith("**")) // --- ЭТО ЖИРНЫЙ ---
+                else if (trimmedPart.StartsWith("**") && trimmedPart.EndsWith("**"))
                 {
-                    var content = part.Substring(2, part.Length - 4);
+                    var content = trimmedPart.Substring(2, trimmedPart.Length - 4);
                     var boldSpan = new Bold();
                     inlines.Add(boldSpan);
-
-                    // РЕКУРСИЯ: Проверяем, нет ли внутри жирного текста еще и `кода`
                     ParseInlineMarkdown(boldSpan, content, Brushes.White);
                 }
-                else // --- ЭТО ОБЫЧНЫЙ ТЕКСТ ---
+                else
                 {
                     inlines.Add(new Run(part) { Foreground = defaultColor });
                 }
