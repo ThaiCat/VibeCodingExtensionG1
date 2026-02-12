@@ -21,9 +21,6 @@ namespace VibeCodingExtensionG1
 
         private readonly AsyncPackage package;
 
-        // Статичное хранилище: живет всё время, пока открыта Visual Studio
-        private static string lastAiResponse = string.Empty;
-
         // Статичный клиент: один на всё расширение, чтобы не перегружать сеть
         private static readonly HttpClient client = new HttpClient
         {
