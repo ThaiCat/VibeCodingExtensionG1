@@ -367,6 +367,9 @@ namespace VibeCodingExtensionG1
         }
         private void AppendFormattedText(string text, bool isUser)
         {
+            // НОРМАЛИЗАЦИЯ: Превращаем HTML-переносы в реальные до начала парсинга
+            text = text.Replace("<br>", "\n").Replace("<br/>", "\n");
+
             var paragraph = new Paragraph { Margin = new Thickness(0, 5, 0, 10) };
             paragraph.Inlines.Add(new Bold(new Run(isUser ? "👤 User: " : "🤖 AI: "))
             { Foreground = isUser ? Brushes.SkyBlue : Brushes.LightGreen });
@@ -374,7 +377,7 @@ namespace VibeCodingExtensionG1
 
             // --- ВОТ ОН, ВОЗВРАТ АВТО-ДЕТЕКТА ---
             // Если это пользователь, и он НЕ использовал кавычки, и это похоже на код
-            if (isUser && !text.Contains("```") && LooksLikeCode(text))
+            if (isUser && /*!text.Contains("```") &&*/ LooksLikeCode(text))
             {
                 AddHighlightCode(paragraph, text.Trim());
                 responseBox.Document.Blocks.Add(paragraph);
@@ -523,7 +526,9 @@ namespace VibeCodingExtensionG1
             if (string.IsNullOrEmpty(text)) return;
 
             // Заменяем HTML-тег <br> на обычный перенос строки, чтобы split его подхватил
-            string normalizedText = text.Replace("<br>", "\n").Replace("<br/>", "\n");
+            //string normalizedText = text.Replace("<br>", "\n").Replace("<br/>", "\n");
+            //string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            // Разрезаем текст по строкам, как и раньше
             string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
             foreach (var line in lines)
@@ -531,18 +536,33 @@ namespace VibeCodingExtensionG1
                 string trimmed = line.Trim();
                 if (string.IsNullOrEmpty(trimmed))
                 {
-                    paragraph.Inlines.Add(new LineBreak());
+                    //paragraph.Inlines.Add(new LineBreak());
                     continue;
                 }
 
                 // --- 1. ТАБЛИЦЫ ---
+                // Внутри ProcessMarkdownText в блоке обработки таблиц:
                 if (trimmed.StartsWith("|"))
                 {
                     var cells = trimmed.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
                     paragraph.Inlines.Add(new Run("  "));
+
                     for (int i = 0; i < cells.Length; i++)
                     {
-                        ParseInlineMarkdown(paragraph, cells[i].Trim());
+                        // ВАЖНО: Внутри ячейки таблицы заменяем <br> на временный маркер
+                        // или обрабатываем их как спецсимволы
+                        string cellContent = cells[i].Trim();
+
+                        // Разделяем содержимое ячейки по <br>, если они там есть
+                        string[] cellSubLines = cellContent.Replace("<br/>", "<br>").Split(new[] { "<br>" }, StringSplitOptions.None);
+
+                        for (int j = 0; j < cellSubLines.Length; j++)
+                        {
+                            ParseInlineMarkdown(paragraph, cellSubLines[j].Trim());
+                            if (j < cellSubLines.Length - 1)
+                                paragraph.Inlines.Add(new LineBreak()); // Перенос внутри ячейки
+                        }
+
                         if (i < cells.Length - 1)
                             paragraph.Inlines.Add(new Run("  │  ") { Foreground = Brushes.DarkGray });
                     }
