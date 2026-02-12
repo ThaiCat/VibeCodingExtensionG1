@@ -206,31 +206,8 @@ namespace VibeCodingExtensionG1
                     messages.Add(new { role = "system", content = sb.ToString() });
                 }
 
-                // Если мы ранее "запомнили" файл, добавляем его первым
-                //if (ContextFiles.Count > 0)
-                //{
-                //    StringBuilder fullContext = new StringBuilder("Используй следующий контекст из нескольких файлов:\n\n");
-                //    foreach (var file in ContextFiles)
-                //    {
-                //        fullContext.AppendLine($"--- FILE: {file.Key} ---");
-                //        fullContext.AppendLine(file.Value);
-                //        fullContext.AppendLine("-------------------\n");
-                //    }
-
-                //    messages.Add(new
-                //    {
-                //        role = "system",
-                //        content = fullContext.ToString()
-                //    });
-                //}
-
                 //Добавляем само выделение и вопрос
                 messages.Add(new { role = "user", content = selectedCode });
-                //messages.Add(new
-                //{
-                //    role = "user",
-                //    content = $"Ниже приведен фрагмент кода. Проанализируй его, учитывая контекст выше (если есть):\n\n{selectedCode}"
-                //});
 
                 var payload = new
                 {
