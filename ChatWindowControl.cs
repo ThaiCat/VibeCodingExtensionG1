@@ -14,6 +14,7 @@ namespace VibeCodingExtensionG1
     {
         private StackPanel filesPanel;
         public static ChatWindowControl Instance { get; private set; }
+        private string lastGeneratedCode = string.Empty;
 
         //private TextBox responseBox;
         private RichTextBox responseBox;
@@ -102,6 +103,16 @@ namespace VibeCodingExtensionG1
             Grid.SetRow(inputBox, 3); // ТУТ ВАЖНО: индекс 3
             grid.Children.Add(inputBox);
 
+            // В конструкторе для inputBox:
+            inputBox.PreviewKeyDown += (s, e) =>
+            {
+                if (e.Key == System.Windows.Input.Key.Enter &&
+                    System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control)
+                {
+                    SendToAi();
+                    e.Handled = true; // Чтобы не добавлялся лишний перенос строки
+                }
+            };
             // --- 4: КНОПКИ ---
 
             var btnDock = new DockPanel
@@ -147,8 +158,34 @@ namespace VibeCodingExtensionG1
 
 
 
+            var btnCopy = new Button
+            {
+                Content = "📋 Copy Code",
+                Padding = new Thickness(5, 5,5,5),
+                Margin = new Thickness(5, 0, 5, 0),
+                MinWidth = 90,
+                HorizontalContentAlignment = HorizontalAlignment.Center
+            };
+            btnCopy.Click += (s, e) =>
+            {
+                if (!string.IsNullOrEmpty(lastGeneratedCode))
+                {
+                    System.Windows.Clipboard.SetText(lastGeneratedCode);
 
+                    // Визуальный фидбек
+                    var originalContent = btnCopy.Content;
+                    btnCopy.Content = "Done!";
+                    btnCopy.Background = Brushes.DarkGreen;
 
+                    var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+                    timer.Tick += (sender, args) => {
+                        btnCopy.Content = originalContent;
+                        btnCopy.ClearValue(Button.BackgroundProperty);
+                        timer.Stop();
+                    };
+                    timer.Start();
+                }
+            };
 
 
             // В конструкторе, там где создаем кнопки:
@@ -172,16 +209,18 @@ namespace VibeCodingExtensionG1
 
             // Добавляем в Dock (между кнопками)
             DockPanel.SetDock(zoomInput, Dock.Left);
-            btnDock.Children.Add(zoomInput);
 
 
-
+            // Добавляем в панель (после зума)
+            DockPanel.SetDock(btnCopy, Dock.Right);
 
 
 
             // Добавляем в панель
             btnDock.Children.Add(btnClear);
+            btnDock.Children.Add(zoomInput);
             btnDock.Children.Add(btnSend);
+            btnDock.Children.Add(btnCopy);
 
             Grid.SetRow(btnDock, 4);
             grid.Children.Add(btnDock);
@@ -365,6 +404,8 @@ namespace VibeCodingExtensionG1
 
         private void AddHighlightCode(Paragraph paragraph, string code)
         {
+            lastGeneratedCode = code;
+
             var keywords = new HashSet<string> {
                 "public", "private", "protected", "static", "class", "struct", "void",
                 "string", "int", "bool", "var", "async", "await", "return", "new", "using", "if", "else", "foreach", "for"
