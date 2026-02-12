@@ -218,10 +218,10 @@ namespace VibeCodingExtensionG1
 
                 var payload = new
                 {
-                    model = "local-model",
+                    model = options.ModelName, // Из настроек
                     messages = messages,
-                    temperature = 0.7,
-                    max_tokens = -1 // Даем ИИ свободу в длине ответа
+                    temperature = options.Temperature, // Из настроек
+                    max_tokens = options.MaxTokens // Из настроек
                 };
 
                 var serializer = new JavaScriptSerializer();
