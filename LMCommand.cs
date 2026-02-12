@@ -42,6 +42,7 @@ namespace VibeCodingExtensionG1
                 Guid CommandSet = new Guid(VibeCodingExtensionG1Package.guidCmdSet);
                 // Идентификаторы команд должны совпадать с файлом magic.vsct
                 // Используем константы напрямую. Это и есть "инлайнинг" в контексте VS SDK.
+                //commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
                 commandService.AddCommand(new MenuCommand(ExecuteAsk, new CommandID(CommandSet, 0x0100)));
                 commandService.AddCommand(new MenuCommand(ExecuteInsert, new CommandID(CommandSet, 0x0101)));
                 commandService.AddCommand(new MenuCommand(ExecuteAddFile, new CommandID(CommandSet, 0x0102)));
@@ -101,7 +102,8 @@ namespace VibeCodingExtensionG1
             // Запускаем асинхронную цепочку через фабрику задач VS
             ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
             {
-                await ProcessAskInternalAsync();
+                //await ProcessAskInternalAsync();
+                await ExecuteAsync(sender, e);
             });
         }
 
@@ -139,6 +141,31 @@ namespace VibeCodingExtensionG1
                 dte.StatusBar.Text = $"Файл '{fileName}' добавлен в контекст чата.";
             }
         }
+
+        private async Task ExecuteAsync(object sender, EventArgs e)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+
+            // 1. Получаем выделенный код
+            var dte = await package.GetServiceAsync(typeof(SDTE)) as DTE2;
+            var selection = dte?.ActiveDocument?.Selection as TextSelection;
+            string selectedCode = selection?.Text;
+
+            if (string.IsNullOrWhiteSpace(selectedCode)) return;
+
+            // 2. Находим наше ToolWindow
+            ToolWindowPane window = this.package.FindToolWindow(typeof(ChatWindow), 0, true);
+            if ((null == window) || (null == window.Frame)) return;
+
+            // 3. Показываем окно
+            IVsWindowFrame windowFrame = (IVsWindowFrame)window.Frame;
+            Microsoft.VisualStudio.ErrorHandler.ThrowOnFailure(windowFrame.Show());
+
+            // 4. Передаем код в контрол и запускаем чат
+            var control = window.Content as ChatWindowControl;
+            control?.SendExternalQuery(selectedCode);
+        }
+
 
         private async Task ProcessAskInternalAsync()
         {

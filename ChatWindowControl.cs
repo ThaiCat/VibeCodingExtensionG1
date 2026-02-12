@@ -328,6 +328,15 @@ namespace VibeCodingExtensionG1
             }
         }
 
+        public void SendExternalQuery(string codeContext)
+        {
+            // Очищаем поле ввода и вставляем туда запрос (или добавляем к существующему)
+            inputBox.Text = $"Объясни этот код или предложи улучшения:\n\n```\n{codeContext}\n```";
+
+            // Вызываем уже существующую логику отправки
+            SendToAi();
+        }
+
         private void SendToAi()
         {
             string text = inputBox.Text.Trim();
