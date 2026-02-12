@@ -364,62 +364,57 @@ namespace VibeCodingExtensionG1
                 responseBox.ScrollToEnd();
             });
         }
-
         private void AppendFormattedText(string text, bool isUser)
         {
             var paragraph = new Paragraph { Margin = new Thickness(0, 5, 0, 10) };
-
-            if (isUser && !text.Contains("```"))
-            {
-                // Считаем признаки кода: точки с запятой, фигурные скобки, лямбды, типичные операторы
-                int codeSignals = 0;
-                if (text.Contains("{") && text.Contains("}")) codeSignals += 2;
-                if (text.Contains(";")) codeSignals += 1;
-                if (text.Contains("=>")) codeSignals += 1;
-                if (text.Contains("public ") || text.Contains("private ")) codeSignals += 1;
-                if (text.Contains("var ") && text.Contains("=")) codeSignals += 1;
-
-                // Если признаков много или текст длинный и структурный — это код
-                if (codeSignals >= 2 || (text.Length > 50 && text.Contains("\n") && codeSignals >= 1))
-                {
-                    AddHighlightCode(paragraph, text.Trim());
-                    responseBox.Document.Blocks.Add(paragraph);
-                    responseBox.ScrollToEnd();
-                    return;
-                }
-            }
-
-            // Заголовок (тот же)
             paragraph.Inlines.Add(new Bold(new Run(isUser ? "👤 User: " : "🤖 AI: "))
             { Foreground = isUser ? Brushes.SkyBlue : Brushes.LightGreen });
             paragraph.Inlines.Add(new LineBreak());
 
-            // 1. Сначала ищем блоки кода (они в приоритете)
-            //var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n?(.*?)\r?\n?```",
-            //    System.Text.RegularExpressions.RegexOptions.Singleline);
+            // 1. Авто-детект для пользователя (без изменений)
+            if (isUser && !text.Contains("```") && LooksLikeCode(text))
+            {
+                AddHighlightCode(paragraph, text.Trim());
+                responseBox.Document.Blocks.Add(paragraph);
+                responseBox.ScrollToEnd();
+                return;
+            }
 
+            // 2. Улучшенная регулярка (ищет блоки с учетом переносов строк)
             var codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n(.*?)\r?\n```",
                 System.Text.RegularExpressions.RegexOptions.Singleline);
 
             int lastIndex = 0;
             var matches = codeRegex.Matches(text);
 
+            if (matches.Count == 0 && text.Contains("```"))
+            {
+                // Если кавычки есть, но регулярка не нашла ПАРНЫХ блоков (битая разметка),
+                // попробуем упрощенный поиск, чтобы хоть что-то подсветить
+                codeRegex = new System.Text.RegularExpressions.Regex(@"```(?:\w+)?\r?\n(.*)",
+                    System.Text.RegularExpressions.RegexOptions.Singleline);
+                matches = codeRegex.Matches(text);
+            }
+
             foreach (System.Text.RegularExpressions.Match match in matches)
             {
-                // Обрабатываем обычный текст ДО кода (в нем может быть жирный шрифт)
-                ProcessMarkdownText(paragraph, text.Substring(lastIndex, match.Index - lastIndex));
+                // Текст до кода
+                string plainText = text.Substring(lastIndex, match.Index - lastIndex);
+                if (!string.IsNullOrWhiteSpace(plainText))
+                    ProcessMarkdownText(paragraph, plainText);
 
-                // Обрабатываем КОД
-                string codeContent = match.Groups[1].Value.Trim('\r', '\n');
+                // Код (извлекаем группу 1)
+                string codeContent = match.Groups[1].Value;
                 paragraph.Inlines.Add(new LineBreak());
-                AddHighlightCode(paragraph, codeContent);
+                AddHighlightCode(paragraph, codeContent.Trim('\r', '\n'));
                 paragraph.Inlines.Add(new LineBreak());
 
                 lastIndex = match.Index + match.Length;
             }
 
-            // Обрабатываем остаток текста
-            ProcessMarkdownText(paragraph, text.Substring(lastIndex));
+            // Остаток текста
+            if (lastIndex < text.Length)
+                ProcessMarkdownText(paragraph, text.Substring(lastIndex));
 
             responseBox.Document.Blocks.Add(paragraph);
             responseBox.ScrollToEnd();
@@ -551,6 +546,17 @@ namespace VibeCodingExtensionG1
                     paragraph.Inlines.Add(new Run(part));
                 }
             }
+        }
+        private bool LooksLikeCode(string text)
+        {
+            int signals = 0;
+            if (text.Contains("{") && text.Contains("}")) signals += 2;
+            if (text.Contains(";")) signals += 1;
+            if (text.Contains("=>")) signals += 1;
+            if (text.Contains("using System")) signals += 2;
+            if (text.Contains("public class") || text.Contains("void Main")) signals += 2;
+
+            return signals >= 2 || (text.Length > 40 && text.Contains("\n") && signals >= 1);
         }
 
         private void ClearAllContext()
