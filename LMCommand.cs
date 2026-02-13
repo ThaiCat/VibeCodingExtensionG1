@@ -293,7 +293,9 @@ namespace VibeCodingExtensionG1
                 {
                     model = options.ModelName,
                     context_length = options.ContextLength,
-                    flash_attention = true
+                    flash_attention = true,
+                    offload_kv_cache_to_gpu = true,
+                    num_experts = 4
                 };
 
                 using (var content = new StringContent(serializer.Serialize(loadData), Encoding.UTF8, "application/json"))
