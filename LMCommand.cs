@@ -177,7 +177,8 @@ namespace VibeCodingExtensionG1
             {
                 ((IVsWindowFrame)window.Frame).Show();
                 var control = window.Content as ChatWindowControl;
-                control?.SendExternalQuery($"{prompt}\n\n```csharp\n{selectedCode}\n```");
+                //control?.SendExternalQuery($"{prompt}\n\n```csharp\n{selectedCode}\n```");
+                control?.SendExternalQuery($"{prompt}\n\n{selectedCode}\n");
             }
         }
 

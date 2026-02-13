@@ -665,14 +665,31 @@ namespace VibeCodingExtensionG1
 
         private bool LooksLikeCode(string text)
         {
-            int signals = 0;
-            if (text.Contains("{") && text.Contains("}")) signals += 2;
-            if (text.Contains(";")) signals += 1;
-            if (text.Contains("=>")) signals += 1;
-            if (text.Contains("using System")) signals += 2;
-            if (text.Contains("public class") || text.Contains("void Main")) signals += 2;
+            if (string.IsNullOrWhiteSpace(text)) return false;
 
-            return signals >= 2 || (text.Length > 40 && text.Contains("\n") && signals >= 1);
+            // Если в тексте есть явные признаки блочного Markdown, это НЕ ленивый код
+            if (text.Contains("```")) return false;
+
+            int signals = 0;
+            string trimmed = text.Trim();
+
+            // Сильные сигналы (характерны почти только для кода)
+            if (trimmed.EndsWith(";") && trimmed.Contains(" ")) signals += 2;
+            if (text.Contains("public ") || text.Contains("private ") || text.Contains("static ")) signals += 2;
+            if (text.Contains("{") && text.Contains("}")) signals += 2;
+            if (text.Contains("=>")) signals += 1;
+            if (text.Contains("using System")) signals += 3;
+            if (System.Text.RegularExpressions.Regex.IsMatch(text, @"\b(var|int|string|bool)\s+\w+\s*=")) signals += 2;
+            if (text.Contains("namespace ")) signals += 3;
+
+            // Проверка на многострочность (код редко бывает в одну короткую строку без пробелов)
+            bool isMultiline = text.Contains("\n");
+
+            // Если это одна строка, она должна быть ОЧЕНЬ похожа на код (например, вызов метода с ;)
+            if (!isMultiline) return signals >= 3;
+
+            // Для многострочного текста порог ниже
+            return signals >= 2;
         }
 
         private void ClearAllContext()
