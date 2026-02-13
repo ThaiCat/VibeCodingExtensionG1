@@ -521,66 +521,58 @@ namespace VibeCodingExtensionG1
         {
             if (string.IsNullOrEmpty(text)) return;
 
-            // Заменяем HTML-тег <br> на обычный перенос строки, чтобы split его подхватил
-            string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            // Нормализация: убираем лишние \r для кроссплатформенности
+            string normalized = text.Replace("\r", "");
+            string[] lines = normalized.Split('\n');
 
             foreach (var line in lines)
             {
                 string trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed))
-                {
-                    continue;
-                }
+                if (string.IsNullOrEmpty(trimmed)) continue;
 
-                // --- 1. ТАБЛИЦЫ ---
-                // Внутри ProcessMarkdownText в блоке обработки таблиц:
+                // 1. Пропускаем разделители таблиц |---|---|
+                if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\|?[\s-:\\|]+$")) continue;
+
+                // 2. ТАБЛИЦЫ
                 if (trimmed.StartsWith("|"))
                 {
-                    var cells = trimmed.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+                    var cells = trimmed.Trim('|').Split('|');
                     paragraph.Inlines.Add(new Run("  "));
 
                     for (int i = 0; i < cells.Length; i++)
                     {
-                        // 1. Склеиваем содержимое ячейки, превращая <br> в реальные переносы
                         string cellContent = cells[i].Replace("<br/>", "\n").Replace("<br>", "\n").Trim();
-
-                        // 2. Парсим всю ячейку целиком (теперь регулярка увидит и начало, и конец кода)
                         ParseInlineMarkdown(paragraph, cellContent);
 
                         if (i < cells.Length - 1)
-                            paragraph.Inlines.Add(new Run("  │  ") { Foreground = Brushes.DarkGray });
+                            paragraph.Inlines.Add(new Run("  │  ") { Foreground = Brushes.DarkGray, FontWeight = FontWeights.Bold });
                     }
-                    // После завершения строки таблицы — перенос
-                    paragraph.Inlines.Add(new LineBreak());
                 }
-                // --- 2. ЗАГОЛОВКИ (###) ---
+                // 3. ЗАГОЛОВКИ
                 else if (trimmed.StartsWith("###"))
                 {
                     string content = trimmed.TrimStart('#').Trim();
-                    // Вместо того чтобы просто добавить Run, мы создаем временный Span
-                    // чтобы ParseInlineMarkdown мог покрасить инлайны внутри заголовка
+                    if (string.IsNullOrEmpty(content)) continue;
+
                     var headerSpan = new Span { FontSize = responseBox.FontSize + 2, FontWeight = FontWeights.Bold };
                     paragraph.Inlines.Add(headerSpan);
-
-                    // Важно: передаем не параграф, а Span заголовка!
                     ParseInlineMarkdown(headerSpan, content, Brushes.SkyBlue);
                 }
-                // --- 3. СПИСКИ (- или * или 1.) ---
-                // Внутри ProcessMarkdownText для списков:
-                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || trimmed.StartsWith("• ") || 
-                    System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
+                // 4. СПИСКИ
+                else if (trimmed.StartsWith("- ") || trimmed.StartsWith("* ") || trimmed.StartsWith("• ") ||
+                         System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+\. "))
                 {
-                    // Определяем уровень отступа (если это вложенный список из <br>)
                     paragraph.Inlines.Add(new Run("    • ") { Foreground = Brushes.Gray });
                     string content = System.Text.RegularExpressions.Regex.Replace(trimmed, @"^([-*•]|\d+\.)\s+", "");
                     ParseInlineMarkdown(paragraph, content);
                 }
-                // --- 4. ОБЫЧНЫЙ ТЕКСТ ---
+                // 5. ОБЫЧНЫЙ ТЕКСТ
                 else
                 {
                     ParseInlineMarkdown(paragraph, line);
                 }
 
+                // Добавляем перенос только если это не последняя строка (чтобы не было пустых хвостов)
                 paragraph.Inlines.Add(new LineBreak());
             }
         }
