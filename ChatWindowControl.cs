@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -348,7 +349,7 @@ namespace VibeCodingExtensionG1
             {
                 ClearAllContext();
                 inputBox.Clear();
-                return;
+                //return;
             }
 
             if (string.IsNullOrWhiteSpace(text)) return;
@@ -697,6 +698,35 @@ namespace VibeCodingExtensionG1
             LMCommand.ContextFiles.Clear();
             RefreshFilesList();
             responseBox.AppendText("\n[Система]: Весь контекст очищен.\n");
+
+            ForceServerReset(this, null);
+        }
+
+        private void ForceServerReset(object sender, EventArgs e)
+        {
+            // ТОЧКА ВХОДА: UI Поток (пользователь нажал на меню)
+
+            // Запускаем асинхронную цепочку через фабрику задач VS
+            ThreadHelper.JoinableTaskFactory.RunAsync(async delegate
+            {
+                //await ForceServerResetAsync();
+                await LMCommand.Instance.HardResetModelAsync();
+            });
+        }
+
+        private async Task ForceServerResetAsync()
+        {
+            // Отправляем пустой запрос с флагом очистки (если сервер поддерживает)
+            // Или просто короткий запрос с другим Seed, что заставит сервер пересчитать контекст
+            var resetData = new
+            {
+                model = "current", // или твой ID модели
+                messages = new[] { new { role = "user", content = "reset" } },
+                max_tokens = 1,
+                stop = new[] { "reset" }
+            };
+
+            // Выполняем POST запрос...
         }
 
         private void StartLongPress()

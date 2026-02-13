@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -241,6 +242,70 @@ namespace VibeCodingExtensionG1
                 }
             }
             catch (Exception ex) { return "Ошибка: " + ex.Message; }
+        }
+
+        public async Task<string> HardResetModelAsync()
+        {
+            var options = (GeneralOptions)package.GetDialogPage(typeof(GeneralOptions));
+            var serializer = new JavaScriptSerializer();
+
+            try
+            {
+                // 1. Получаем список активных моделей
+                string modelsJson = await client.GetStringAsync(options.ModelsUrl);
+
+                // Динамически парсим JSON, так как структура простая
+                var modelsData = serializer.Deserialize<Dictionary<string, object>>(modelsJson);
+                var dataList = modelsData["data"] as System.Collections.ArrayList;
+
+                string activeInstanceId = null;
+
+                if (dataList != null)
+                {
+                    foreach (Dictionary<string, object> modelEntry in dataList)
+                    {
+                        string id = modelEntry["id"].ToString();
+                        // Ищем совпадение с ModelName из настроек
+                        if (id.Contains(options.ModelName) || options.ModelName == "local-model")
+                        {
+                            activeInstanceId = id;
+                            break;
+                        }
+                    }
+                }
+
+                if (string.IsNullOrEmpty(activeInstanceId))
+                    return "Активная модель не найдена. Возможно, она уже выгружена.";
+
+                options.ModelName = activeInstanceId;
+
+                // 2. Выгрузка (Unload) используя найденный instance_id
+                var unloadData = new { instance_id = activeInstanceId };
+                using (var content = new StringContent(serializer.Serialize(unloadData), Encoding.UTF8, "application/json"))
+                {
+                    await client.PostAsync(options.UnloadUrl, content);
+                }
+
+                await Task.Delay(2000); // Даем время на освобождение VRAM
+
+                // 3. Загрузка (Load) заново
+                var loadData = new
+                {
+                    model = options.ModelName,
+                    context_length = options.ContextLength,
+                    flash_attention = true
+                };
+
+                using (var content = new StringContent(serializer.Serialize(loadData), Encoding.UTF8, "application/json"))
+                {
+                    var response = await client.PostAsync(options.LoadUrl, content);
+                    return response.IsSuccessStatusCode ? "OK" : $"Ошибка загрузки: {response.StatusCode}";
+                }
+            }
+            catch (Exception ex)
+            {
+                return $"Ошибка Hard Reset: {ex.Message}";
+            }
         }
 
         private string ParseJsonContent(string json, double elapsedSeconds)

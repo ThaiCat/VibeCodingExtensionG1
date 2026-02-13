@@ -7,13 +7,33 @@ namespace VibeCodingExtensionG1
     {
         // --- Подключение ---
         [Category("1. Connection")]
+        [DisplayName("Model Name")]
+        public string ModelName { get; set; } = "openai/gpt-oss-20b";
+
+        [Category("1. Connection")]
+        [DisplayName("Models List URL")]
+        [Description("Эндпоинт для получения списка активных моделей")]
+        public string ModelsUrl { get; set; } = "http://localhost:1234/v1/models";
+
+        [Category("1. Connection")]
         [DisplayName("API URL")]
         [Description("Endpoint для API LM Studio")]
         public string ApiUrl { get; set; } = "http://localhost:1234/v1/chat/completions";
+        
+        [Category("1. Connection")]
+        [DisplayName("Unload Model URL")]
+        [Description("Эндпоинт для выгрузки модели из памяти")]
+        public string UnloadUrl { get; set; } = "http://localhost:1234/api/v1/models/unload";
 
         [Category("1. Connection")]
-        [DisplayName("Model Name")]
-        public string ModelName { get; set; } = "local-model";
+        [DisplayName("Load Model URL")]
+        [Description("Эндпоинт для загрузки модели в память")]
+        public string LoadUrl { get; set; } = "http://localhost:1234/api/v1/models/load";
+
+        [Category("2. AI Parameters")]
+        [DisplayName("Context Length")]
+        [Description("Размер контекстного окна при перезагрузке (токены)")]
+        public int ContextLength { get; set; } = 32000;
 
         // --- Параметры нейросети ---
         [Category("2. AI Parameters")]
