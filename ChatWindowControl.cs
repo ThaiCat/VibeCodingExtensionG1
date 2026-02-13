@@ -668,7 +668,7 @@ namespace VibeCodingExtensionG1
             if (string.IsNullOrWhiteSpace(text)) return false;
 
             // Если в тексте есть явные признаки блочного Markdown, это НЕ ленивый код
-            if (text.Contains("```")) return false;
+            //if (text.Contains("```")) return false;
 
             int signals = 0;
             string trimmed = text.Trim();
