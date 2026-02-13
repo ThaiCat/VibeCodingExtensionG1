@@ -480,10 +480,6 @@ namespace VibeCodingExtensionG1
                 "lock", "typeof", "sizeof", "checked", "unchecked", "get", "set", "init", "value"
             };
 
-            // Регулярка для деления на: комментарии (//...), строки ("..."), слова (\w+) или прочее (\W)
-            //var tokens = System.Text.RegularExpressions.Regex.Matches(code, @"(//.*?$)|("".*?"")|(\w+)|(\W)",
-            //    System.Text.RegularExpressions.RegexOptions.Multiline);
-
             // ОБНОВЛЕННАЯ РЕГУЛЯРКА: 
             // Добавляем (@"".*?"") для поддержки verbatim-строк C# и (```) как отдельный токен
             var tokens = System.Text.RegularExpressions.Regex.Matches(code,
@@ -526,9 +522,6 @@ namespace VibeCodingExtensionG1
             if (string.IsNullOrEmpty(text)) return;
 
             // Заменяем HTML-тег <br> на обычный перенос строки, чтобы split его подхватил
-            //string normalizedText = text.Replace("<br>", "\n").Replace("<br/>", "\n");
-            //string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            // Разрезаем текст по строкам, как и раньше
             string[] lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
 
             foreach (var line in lines)
@@ -536,12 +529,10 @@ namespace VibeCodingExtensionG1
                 string trimmed = line.Trim();
                 if (string.IsNullOrEmpty(trimmed))
                 {
-                    //paragraph.Inlines.Add(new LineBreak());
                     continue;
                 }
 
                 // --- 1. ТАБЛИЦЫ ---
-                // Внутри ProcessMarkdownText в блоке обработки таблиц:
                 // Внутри ProcessMarkdownText в блоке обработки таблиц:
                 if (trimmed.StartsWith("|"))
                 {
